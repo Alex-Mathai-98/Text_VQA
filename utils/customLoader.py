@@ -51,7 +51,7 @@ class CustomDataset(data.Dataset):
 		if self.set_ == "test" :
 			return X
 
-		y = self.cleaned_json["answers"]["ID"][0]
+		y = self.cleaned_json["answers"][ID][0]
 
 		return X, y
 
