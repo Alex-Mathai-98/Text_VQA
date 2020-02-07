@@ -75,6 +75,6 @@ print("Num Answers : {}".format(len(imageIdlist)))
 with open(to_data_path,"w") as f:
 	json.dump(new_json,f,indent=4)
 
-with open(os.path.join("../Data/" + set_ + "/","test_ids.txt"),"w") as f:
+with open(os.path.join("../Data/" + set_ + "/", set_ + "_ids.txt"),"w") as f:
 	for imageId in imageIdlist :
 		f.write(imageId+"\n")
