@@ -39,6 +39,7 @@ new_json = {"image_classes": {},
 			"image_height" : {},
 			"ocr_tokens" : {},
 			"question_tokens": {},
+			"question" : {},
 			"answers" : {}}
 
 imageIdlist = []
@@ -52,6 +53,7 @@ for key,value in enumerate(data) :
 	image_width = value["image_width"]
 	ocr_tokens = value["ocr_tokens"]
 	question_tokens = value["question_tokens"]
+	question = value["question"]
 	answers = None
 
 	if value.get("answers",-1) != -1 :
@@ -64,6 +66,7 @@ for key,value in enumerate(data) :
 	new_json["image_width"][image_id] = image_width
 	new_json["ocr_tokens"][image_id] = ocr_tokens
 	new_json["question_tokens"][image_id] = question_tokens
+	new_json["question"][image_id] = question
 
 	if answers is not None :
 		new_json["answers"][image_id] = answers
