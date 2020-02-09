@@ -43,25 +43,30 @@ class CustomDataset(data.Dataset):
 
 		# Select sample
 		ID = self.list_IDs[index]
-
-		# Load data and get label
+		print("Id : {}".format(ID))
+		# Load image
 		X = Image.open(os.path.join(data_path,self.set_+"/" + self.set_ + "_images/"+ID+".jpg"))
 		X = self.transforms(X)
 
+		# Load question
+		q = self.cleaned_json["question"][ID]
+
 		if self.set_ == "test" :
-			return X
-
-		y = self.cleaned_json["answers"][ID][0]
-
-		return X, y
+			return X,q
+		else :
+			# Load Label
+			y = self.cleaned_json["answers"][ID][0]
+			return X,q,y
 
 
 if __name__ == '__main__' :
 
 	data_path = "/home/alex/Desktop/4-2/Text_VQA/Data/"
-	ID_path = os.path.join(data_path,"test/test_ids.txt")
-	json_path = os.path.join(data_path,"test/cleaned.json")
-	alex = CustomDataset(data_path,ID_path,json_path,(448,448),set_="test")
+	ID_path = os.path.join(data_path,"train/train_ids.txt")
+	json_path = os.path.join(data_path,"train/cleaned.json")
+	alex = CustomDataset(data_path,ID_path,json_path,(448,448),set_="train")
 
-	X = alex.__getitem__(2)
+	X,q,y = alex.__getitem__(5423)
 	print(X.size())
+	print("Question : {}".format(q))
+	print("Answer : {}".format(y))
