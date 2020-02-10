@@ -4,6 +4,9 @@ from torchvision import transforms
 from PIL import Image
 import json
 import os
+import numpy as np
+import tqdm
+from transformers import BertTokenizer
 
 class CustomDataset(data.Dataset):
 	'Characterizes a dataset for PyTorch'
@@ -17,7 +20,7 @@ class CustomDataset(data.Dataset):
 		self.channel_mean = [0.485, 0.456, 0.406]
 		self.channel_std = [0.229, 0.224, 0.225]
 
-		self.transforms = transforms.Compose([
+		self.color_transforms = transforms.Compose([
 				transforms.Resize(self.target_image_size),
 				transforms.ToTensor(),
 				transforms.Normalize(self.channel_mean, self.channel_std)])
@@ -43,10 +46,14 @@ class CustomDataset(data.Dataset):
 
 		# Select sample
 		ID = self.list_IDs[index]
-		print("Id : {}".format(ID))
+
 		# Load image
 		X = Image.open(os.path.join(data_path,self.set_+"/" + self.set_ + "_images/"+ID+".jpg"))
-		X = self.transforms(X)
+		
+		if X.mode != 'RGB' :
+			X = X.convert('RGB')
+
+		X = self.color_transforms(X)
 
 		# Load question
 		q = self.cleaned_json["question"][ID]
@@ -65,8 +72,31 @@ if __name__ == '__main__' :
 	ID_path = os.path.join(data_path,"train/train_ids.txt")
 	json_path = os.path.join(data_path,"train/cleaned.json")
 	alex = CustomDataset(data_path,ID_path,json_path,(448,448),set_="train")
+	tks = BertTokenizer.from_pretrained('bert-base-uncased', do_lower_case=True)
 
-	X,q,y = alex.__getitem__(5423)
-	print(X.size())
-	print("Question : {}".format(q))
-	print("Answer : {}".format(y))
+	total = 0
+	issue = 0
+	for x in alex:
+		
+		print("Index : {}".format(total))
+
+		X, q, y = x
+		tokens = tks.tokenize(q)
+		flag = 0
+		
+		for token in tokens:
+			if '##' in token:
+				flag = 1
+				break
+
+		if flag:
+			issue += 1
+
+		total += 1
+
+	print (issue)
+	print (total)
+		# print ('Hey')
+		# print("Question : {}".format(q))
+		# print("Answer : {}".format(y))
+		# break
