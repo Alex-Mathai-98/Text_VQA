@@ -1,0 +1,2 @@
+## Examples for object detection
+The below image is an example of the output of fasterrcnn/maskrcnn. Fasterrcnn as model type would produce information relevant to the image on the left (below) and maskrcnn would additionally create masks within each of these bounding boxes also producing masks as seen on the right (below) ![image](https://raw.githubusercontent.com/Alex-Mathai-98/Text_VQA/master/inference_examples/3e3169071c91e1cf.jpg)
