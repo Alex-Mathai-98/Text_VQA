@@ -1,4 +1,4 @@
-import sys, os ,cv2, random, matplotlib.pyplot as plt
+import sys, os ,cv2, random, matplotlib.pyplot as plt, numpy as np
 import torchvision, torchvision.transforms as T, torch.nn as nn
 from tqdm import tqdm
 from PIL import Image
@@ -27,34 +27,50 @@ class ObjectDetector(nn.Module):
         pred_class = [self.classes[i] for i in list(pred[0]['labels'].numpy())]
         pred_boxes = [[(i[0], i[1]), (i[2], i[3])] for i in list(pred[0]['boxes'].detach().numpy())] 
         pred_score = list(pred[0]['scores'].detach().numpy())
-        if self.type == 'maskrcnn':
-            print(pred[0]['masks'].detach().numpy().shape)
         pred_t = [pred_score.index(x) for x in pred_score if x > threshold][-1] 
         pred_boxes = pred_boxes[:pred_t+1]
         pred_class = pred_class[:pred_t+1]
-        return pred_boxes, pred_class
+        pred_masks = None
+        if self.type == 'maskrcnn':
+            pred_masks = pred[0]['masks'].detach().numpy()
+            pred_masks = pred_masks[:pred_t+1]
+        return pred_boxes, pred_class, pred_masks
 
-    def display_objects(self, image_path, boxes, class_label, show_label = True, threshold = 0.5, rect_th = 2, text_size = 1, text_th = 2):
+    def display_objects(self, image_path, boxes, class_label, masks, show_label = True, threshold = 0.5, rect_th = 2, text_size = 1, text_th = 2):
         image = cv2.imread(image_path)
         image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+        if masks is not None: 
+            all_masks = np.zeros_like((np.vstack([masks[0]] * 3)).transpose(1, 2, 0))
+            for i, mask in enumerate(masks):
+                mask = (np.vstack([mask] * 3)).transpose(1, 2, 0) * 255
+                all_masks += np.uint8(mask)
         for i in range(len(boxes)):
-            cv2.rectangle(image, boxes[i][0], boxes[i][1],color=(0, 255, 0), thickness=rect_th)
+            cv2.rectangle(image, boxes[i][0], boxes[i][1],color=(255, 0, 0), thickness=rect_th)
             if show_label:
                 cv2.putText(image,class_label[i], boxes[i][0],  cv2.FONT_HERSHEY_SIMPLEX, text_size, (0,255,0),thickness=text_th)
         plt.figure(figsize = (20, 30))
-        plt.imshow(image)
-        plt.xticks([])
-        plt.yticks([])
-        plt.show()
+        if masks is not None:
+            plt.imshow(np.hstack([image / 255.0, all_masks]))
+        else:
+            plt.imshow(image)
+        plt.xticks([]), plt.yticks([]), plt.show()
     
-    def save_boxed_image(self, image_path, save_path, boxes, class_label, show_label = True, threshold = 0.5, rect_th = 2, text_size = 1, text_th = 2):
+    def save_boxed_image(self, image_path, save_path, boxes, class_label, masks, show_label = True, threshold = 0.5, rect_th = 2, text_size = 1, text_th = 2):
         image = cv2.imread(image_path)
         image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+        if masks is not None: 
+            all_masks = np.zeros_like((np.vstack([masks[0]] * 3)).transpose(1, 2, 0))
+            for i, mask in enumerate(masks):
+                mask = (np.vstack([mask] * 3)).transpose(1, 2, 0) * 255
+                all_masks += np.uint8(mask)
         for i in range(len(boxes)):
             cv2.rectangle(image, boxes[i][0], boxes[i][1],color=(0, 255, 0), thickness=rect_th)
             if show_label:
                 cv2.putText(image,class_label[i], boxes[i][0],  cv2.FONT_HERSHEY_SIMPLEX, text_size, (0,255,0),thickness=text_th)
-        cv2.imwrite(os.path.join(save_path, image_path.rsplit('/')[-1]), cv2.cvtColor(image, cv2.COLOR_RGB2BGR))
+        if masks is not None:
+            cv2.imwrite(os.path.join(save_path, image_path.rsplit('/')[-1]), cv2.cvtColor(np.hstack([image, all_masks]), cv2.COLOR_RGB2BGR))
+        else:
+            cv2.imwrite(os.path.join(save_path, image_path.rsplit('/')[-1]), cv2.cvtColor(image, cv2.COLOR_RGB2BGR))
         print("Image saved as {}".format(str(os.path.join(save_path, image_path.rsplit('/')[-1]))))
 
 if __name__ == '__main__':
@@ -68,8 +84,8 @@ if __name__ == '__main__':
     object_detector = ObjectDetector(type = 'fasterrcnn')
 
     # threshold (0.4) is the confidence value above which to consider a box relevant ; boxes and class_label are as expected
-    boxes, class_label = object_detector(inference_example, 0.5)
-    object_detector.display_objects(inference_example, boxes, class_label, show_label = True)
+    boxes, class_label, masks = object_detector(inference_example, 0.4)
+    object_detector.display_objects(inference_example, boxes, class_label, masks, show_label = True)
     save_dir = 'inference_examples'
     os.makedirs(save_dir, exist_ok = True)
-    object_detector.save_boxed_image(inference_example, save_dir, boxes, class_label, show_label = True)
+    object_detector.save_boxed_image(inference_example, save_dir, boxes, class_label, masks, show_label = True)
