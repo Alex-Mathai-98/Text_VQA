@@ -40,6 +40,10 @@ class CustomDataset(data.Dataset):
 	def __len__(self):
 		'Denotes the total number of samples'
 		return len(self.list_IDs)
+	
+	def get_path(self, index):
+		ID = self.list_IDs[index]
+		return str(os.path.join(self.data_path, self.set_+"/" + self.set_ + "_images/"+ID+".jpg"))
 
 	def __getitem__(self, index):
 		'Generates one sample of data'
