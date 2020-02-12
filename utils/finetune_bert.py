@@ -62,6 +62,7 @@ MODEL_CLASSES = {
     "bert": (BertConfig, BertForMaskedLM, BertTokenizer),
 }
 
+SPECIAL_TOKENS = []
 
 class TextDataset(Dataset):
     def __init__(self, tokenizer: PreTrainedTokenizer, args, file_path: str, block_size=512):
@@ -695,10 +696,11 @@ def main():
     else:
         config = config_class()
 
-    if args.tokenizer_name:
-        tokenizer = tokenizer_class.from_pretrained(args.tokenizer_name, cache_dir=args.cache_dir)
-    elif args.model_name_or_path:
-        tokenizer = tokenizer_class.from_pretrained(args.model_name_or_path, cache_dir=args.cache_dir)
+    # if args.tokenizer_name:
+    #     tokenizer = tokenizer_class.from_pretrained(args.tokenizer_name, cache_dir=args.cache_dir)
+    # elif args.model_name_or_path:
+    tokenizer = BertTokenizer.from_pretrained('bert-base-uncased', do_lower_case=True)
+    tokenizer.add_tokens(SPECIAL_TOKENS)
     else:
         raise ValueError(
             "You are instantiating a new {} tokenizer. This is not supported, but you can do it from another script, save it,"
@@ -718,6 +720,8 @@ def main():
     else:
         logger.info("Training new model from scratch")
         model = model_class(config=config)
+
+    model.resize_token_embeddings(len(tokenizer))
 
     model.to(args.device)
 
