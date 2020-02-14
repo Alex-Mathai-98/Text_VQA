@@ -29,6 +29,7 @@ import random
 import re
 import shutil
 from typing import Dict, List, Tuple
+import pickle
 
 import numpy as np
 import torch
@@ -62,7 +63,8 @@ MODEL_CLASSES = {
     "bert": (BertConfig, BertForMaskedLM, BertTokenizer),
 }
 
-SPECIAL_TOKENS = []
+with open('oov_tokens.pkl', 'rb') as f:
+    SPECIAL_TOKENS = pickle.load(f)
 
 class TextDataset(Dataset):
     def __init__(self, tokenizer: PreTrainedTokenizer, args, file_path: str, block_size=512):
