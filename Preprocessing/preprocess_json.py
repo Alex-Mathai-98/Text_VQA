@@ -1,7 +1,7 @@
 import json
 import os
 
-set_ = "test"
+set_ = "train"
 from_data_path = "../Data/" + set_ + "/meta-data.json"
 to_data_path = "../Data/" + set_ + "/cleaned.json"
 
@@ -34,7 +34,8 @@ with open(from_data_path) as f:
 
 data = data['data']
 
-new_json = {"image_classes": {},
+new_json = {"image_ids": {},
+			"image_classes": {},
 			"image_width": {},
 			"image_height" : {},
 			"ocr_tokens" : {},
@@ -61,17 +62,18 @@ for key,value in enumerate(data) :
 		if (answers[1]<3) or (answers[0]=="answering does not require reading text in the image") :
 			continue
 
-	new_json["image_classes"][image_id] = image_classes
-	new_json["image_height"][image_id] = image_height
-	new_json["image_width"][image_id] = image_width
-	new_json["ocr_tokens"][image_id] = ocr_tokens
-	new_json["question_tokens"][image_id] = question_tokens
-	new_json["question"][image_id] = question
+	new_json["image_ids"][key] = image_id
+	new_json["image_classes"][key] = image_classes
+	new_json["image_height"][key] = image_height
+	new_json["image_width"][key] = image_width
+	new_json["ocr_tokens"][key] = ocr_tokens
+	new_json["question_tokens"][key] = question_tokens
+	new_json["question"][key] = question
 
 	if answers is not None :
-		new_json["answers"][image_id] = answers
+		new_json["answers"][key] = answers
 
-	imageIdlist.append(image_id)
+	imageIdlist.append(key)
 
 print("Num Answers : {}".format(len(imageIdlist)))
 
@@ -80,4 +82,4 @@ with open(to_data_path,"w") as f:
 
 with open(os.path.join("../Data/" + set_ + "/", set_ + "_ids.txt"),"w") as f:
 	for imageId in imageIdlist :
-		f.write(imageId+"\n")
+		f.write(str(imageId)+"\n")
