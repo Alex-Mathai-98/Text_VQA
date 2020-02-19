@@ -29,7 +29,6 @@ import random
 import re
 import shutil
 from typing import Dict, List, Tuple
-import pickle
 
 import numpy as np
 import torch
@@ -37,6 +36,7 @@ from torch.nn.utils.rnn import pad_sequence
 from torch.utils.data import DataLoader, Dataset, RandomSampler, SequentialSampler
 from torch.utils.data.distributed import DistributedSampler
 from tqdm import tqdm, trange
+import pickle
 
 from transformers import (
     WEIGHTS_NAME,
@@ -44,8 +44,23 @@ from transformers import (
     BertConfig,
     BertForMaskedLM,
     BertTokenizer,
+    CamembertConfig,
+    CamembertForMaskedLM,
+    CamembertTokenizer,
+    DistilBertConfig,
+    DistilBertForMaskedLM,
+    DistilBertTokenizer,
+    GPT2Config,
+    GPT2LMHeadModel,
+    GPT2Tokenizer,
+    OpenAIGPTConfig,
+    OpenAIGPTLMHeadModel,
+    OpenAIGPTTokenizer,
     PreTrainedModel,
     PreTrainedTokenizer,
+    RobertaConfig,
+    RobertaForMaskedLM,
+    RobertaTokenizer,
     get_linear_schedule_with_warmup,
 )
 
@@ -69,6 +84,9 @@ with open('oov_tokens.pkl', 'rb') as f:
 class TextDataset(Dataset):
     def __init__(self, tokenizer: PreTrainedTokenizer, args, file_path: str, block_size=512):
         assert os.path.isfile(file_path)
+
+        block_size = block_size - (tokenizer.max_len - tokenizer.max_len_single_sentence)
+
         directory, filename = os.path.split(file_path)
         cached_features_file = os.path.join(
             directory, args.model_type + "_cached_lm_" + str(block_size) + "_" + filename
@@ -113,9 +131,11 @@ class LineByLineTextDataset(Dataset):
         logger.info("Creating features from dataset file at %s", file_path)
 
         with open(file_path, encoding="utf-8") as f:
-            lines = [line for line in f.read().splitlines() if len(line) > 0]
+            lines = [line for line in f.read().splitlines() if (len(line) > 0 and not line.isspace())]
 
-        self.examples = tokenizer.batch_encode_plus(lines, max_length=block_size)["input_ids"]
+        print ('###################### Lines = ', len(lines))
+
+        self.examples = tokenizer.batch_encode_plus(lines, add_special_tokens=True, max_length=block_size)["input_ids"]
 
     def __len__(self):
         return len(self.examples)
@@ -127,8 +147,10 @@ class LineByLineTextDataset(Dataset):
 def load_and_cache_examples(args, tokenizer, evaluate=False):
     file_path = args.eval_data_file if evaluate else args.train_data_file
     if args.line_by_line:
+        print ("True hai")
         return LineByLineTextDataset(tokenizer, args, file_path=file_path, block_size=args.block_size)
     else:
+        print ("True nhi hai")
         return TextDataset(tokenizer, args, file_path=file_path, block_size=args.block_size)
 
 
@@ -176,42 +198,26 @@ def _rotate_checkpoints(args, checkpoint_prefix="checkpoint", use_mtime=False) -
         shutil.rmtree(checkpoint)
 
 
-# def mask_tokens(inputs: torch.Tensor, tokenizer: PreTrainedTokenizer, args) -> Tuple[torch.Tensor, torch.Tensor]:
-#     """ Prepare masked tokens inputs/labels for masked language modeling: 80% MASK, 10% random, 10% original. """
-#     labels = inputs.clone()
-#     # We sample a few tokens in each sequence for masked-LM training (with probability args.mlm_probability defaults to 0.15 in Bert/RoBERTa)
-#     probability_matrix = torch.full(labels.shape, args.mlm_probability)
-#     special_tokens_mask = [
-#         tokenizer.get_special_tokens_mask(val, already_has_special_tokens=True) for val in labels.tolist()
-#     ]
-#     probability_matrix.masked_fill_(torch.tensor(special_tokens_mask).byte(), value=0.0)
-#     if tokenizer._pad_token is not None:
-#         padding_mask = labels.eq(tokenizer.pad_token_id)
-#         probability_matrix.masked_fill_(padding_mask, value=0.0)
-#     masked_indices = torch.bernoulli(probability_matrix).bool()
-#     labels[~masked_indices] = -100  # We only compute loss on masked tokens
-
-#     # 80% of the time, we replace masked input tokens with tokenizer.mask_token ([MASK])
-#     indices_replaced = torch.bernoulli(torch.full(labels.shape, 0.8)).bool() & masked_indices
-#     inputs[indices_replaced] = tokenizer.convert_tokens_to_ids(tokenizer.mask_token)
-
-#     # 10% of the time, we replace masked input tokens with random word
-#     indices_random = torch.bernoulli(torch.full(labels.shape, 0.5)).bool() & masked_indices & ~indices_replaced
-#     random_words = torch.randint(len(tokenizer), labels.shape, dtype=torch.long)
-#     inputs[indices_random] = random_words[indices_random]
-
-#     # The rest of the time (10% of the time) we keep the masked input tokens unchanged
-#     return inputs, labels
-
-def mask_tokens(inputs, tokenizer, args):
+def mask_tokens(inputs: torch.Tensor, tokenizer: PreTrainedTokenizer, args) -> Tuple[torch.Tensor, torch.Tensor]:
     """ Prepare masked tokens inputs/labels for masked language modeling: 80% MASK, 10% random, 10% original. """
+
+    if tokenizer.mask_token is None:
+        raise ValueError(
+            "This tokenizer does not have a mask token which is necessary for masked language modeling. Remove the --mlm flag if you want to use this tokenizer."
+        )
+
     labels = inputs.clone()
     # We sample a few tokens in each sequence for masked-LM training (with probability args.mlm_probability defaults to 0.15 in Bert/RoBERTa)
     probability_matrix = torch.full(labels.shape, args.mlm_probability)
-    special_tokens_mask = [tokenizer.get_special_tokens_mask(val, already_has_special_tokens=True) for val in labels.tolist()]
+    special_tokens_mask = [
+        tokenizer.get_special_tokens_mask(val, already_has_special_tokens=True) for val in labels.tolist()
+    ]
     probability_matrix.masked_fill_(torch.tensor(special_tokens_mask, dtype=torch.uint8), value=0.0)
+    if tokenizer._pad_token is not None:
+        padding_mask = labels.eq(tokenizer.pad_token_id)
+        probability_matrix.masked_fill_(padding_mask, value=0.0)
     masked_indices = torch.bernoulli(probability_matrix).byte()
-    labels[~masked_indices] = -1  # We only compute loss on masked tokens
+    labels[~masked_indices] = -100  # We only compute loss on masked tokens
 
     # 80% of the time, we replace masked input tokens with tokenizer.mask_token ([MASK])
     indices_replaced = torch.bernoulli(torch.full(labels.shape, 0.8)).byte() & masked_indices
@@ -502,7 +508,7 @@ def main():
     )
     parser.add_argument(
         "--line_by_line",
-        action="store_true",
+        action="store_false",
         help="Whether distinct lines of text in the dataset are to be handled as distinct sequences.",
     )
     parser.add_argument(
@@ -561,7 +567,7 @@ def main():
     parser.add_argument(
         "--gradient_accumulation_steps",
         type=int,
-        default=1,
+        default=2,
         help="Number of updates steps to accumulate before performing a backward/update pass.",
     )
     parser.add_argument("--learning_rate", default=5e-5, type=float, help="The initial learning rate for Adam.")
@@ -698,32 +704,41 @@ def main():
     else:
         config = config_class()
 
+    config = BertConfig.from_pretrained('bert-base-uncased')
+
     # if args.tokenizer_name:
     #     tokenizer = tokenizer_class.from_pretrained(args.tokenizer_name, cache_dir=args.cache_dir)
     # elif args.model_name_or_path:
+    #     tokenizer = tokenizer_class.from_pretrained(args.model_name_or_path, cache_dir=args.cache_dir)
+    # else:
+    #     raise ValueError(
+    #         "You are instantiating a new {} tokenizer. This is not supported, but you can do it from another script, save it,"
+    #         "and load it from here, using --tokenizer_name".format(tokenizer_class.__name__)
+    #     )
+
     tokenizer = BertTokenizer.from_pretrained('bert-base-uncased', do_lower_case=True)
     tokenizer.add_tokens(SPECIAL_TOKENS)
-    else:
-        raise ValueError(
-            "You are instantiating a new {} tokenizer. This is not supported, but you can do it from another script, save it,"
-            "and load it from here, using --tokenizer_name".format(tokenizer_class.__name__)
-        )
 
     if args.block_size <= 0:
-        args.block_size = tokenizer.max_len_single_sentence
+        args.block_size = tokenizer.max_len
         # Our input block size will be the max possible for the model
     else:
-        args.block_size = min(args.block_size, tokenizer.max_len_single_sentence)
+        args.block_size = min(args.block_size, tokenizer.max_len)
 
-    if args.model_name_or_path:
-        model = model_class.from_pretrained(
-            args.model_name_or_path
-        )
-    else:
-        logger.info("Training new model from scratch")
-        model = model_class(config=config)
+    # if args.model_name_or_path:
+    #     model = model_class.from_pretrained(
+    #         args.model_name_or_path,
+    #         from_tf=bool(".ckpt" in args.model_name_or_path),
+    #         config=config,
+    #         cache_dir=args.cache_dir,
+    #     )
+    # else:
+    #     logger.info("Training new model from scratch")
+    #     model = model_class(config=config)
 
-    model.resize_token_embeddings(len(tokenizer))
+    model = BertForMaskedLM.from_pretrained('bert-base-uncased')
+
+    new_size = model.resize_token_embeddings(len(tokenizer))
 
     model.to(args.device)
 
@@ -738,6 +753,7 @@ def main():
             torch.distributed.barrier()  # Barrier to make sure only the first process in distributed training process the dataset, and the others will use the cache
 
         train_dataset = load_and_cache_examples(args, tokenizer, evaluate=False)
+        print ("Len of dataset = ", len(train_dataset))
 
         if args.local_rank == 0:
             torch.distributed.barrier()
@@ -764,8 +780,8 @@ def main():
         torch.save(args, os.path.join(args.output_dir, "training_args.bin"))
 
         # Load a trained model and vocabulary that you have fine-tuned
-        model = model_class.from_pretrained(args.output_dir)
-        tokenizer = tokenizer_class.from_pretrained(args.output_dir)
+        model = BertForMaskedLM.from_pretrained(args.output_dir)
+        tokenizer = BertTokenizer.from_pretrained(args.output_dir)
         model.to(args.device)
 
     # Evaluation
@@ -782,7 +798,7 @@ def main():
             global_step = checkpoint.split("-")[-1] if len(checkpoints) > 1 else ""
             prefix = checkpoint.split("/")[-1] if checkpoint.find("checkpoint") != -1 else ""
 
-            model = model_class.from_pretrained(checkpoint)
+            model = BertForMaskedLM.from_pretrained(checkpoint)
             model.to(args.device)
             result = evaluate(args, model, tokenizer, prefix=prefix)
             result = dict((k + "_{}".format(global_step), v) for k, v in result.items())
@@ -792,5 +808,4 @@ def main():
 
 
 if __name__ == "__main__":
-    # print (torch.__version__)
     main()
