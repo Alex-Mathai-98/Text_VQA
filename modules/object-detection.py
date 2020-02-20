@@ -89,3 +89,4 @@ if __name__ == '__main__':
     save_dir = 'inference_examples'
     os.makedirs(save_dir, exist_ok = True)
     object_detector.save_boxed_image(inference_example, save_dir, boxes, class_label, masks, show_label = True)
+    #Check if changes made to file is pushable using vscode - test
