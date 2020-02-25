@@ -90,6 +90,11 @@ if __name__ == '__main__' :
 		print("Index : {}".format(total))
 
 		X, q, y = x[0], x[1][0], x[2][0]
+
+		print("X : {}".format(X.size()))
+		print("Q : {}".format(q))
+		print("Y : {}".format(y))
+
 		tokens = tks.tokenize(q)
 		ids = torch.tensor(tks.convert_tokens_to_ids(tokens)).unsqueeze(0)
 		embeds = bert_model(ids)[0]
