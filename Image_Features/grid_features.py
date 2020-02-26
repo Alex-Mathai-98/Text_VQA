@@ -15,10 +15,9 @@ class GridFeatures(nn.Module) :
 	def forward(self,X):
 		return self.model(X)
 
-
-
 if __name__ == '__main__' :
 
 	X = torch.randn((1,3,448,448))
 	alex = GridFeatures("resnet101")
-	alex(X)
+	t1 = alex(X)
+	print("Shape : {}".format(t1.size()))
