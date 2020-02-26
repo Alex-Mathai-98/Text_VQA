@@ -41,6 +41,9 @@ class CustomDataset(data.Dataset):
 		'Denotes the total number of samples'
 		return len(self.list_IDs)
 	
+	def get_ID(self, index):
+		return self.list_IDs[index]
+
 	def get_path(self, index):
 		ID = self.list_IDs[index]
 		return str(os.path.join(self.data_path, self.set_+"/" + self.set_ + "_images/"+ID+".jpg"))

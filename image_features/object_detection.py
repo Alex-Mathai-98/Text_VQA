@@ -1,11 +1,11 @@
 import sys, os ,cv2, random, matplotlib.pyplot as plt, numpy as np, pickle
-import torchvision, torchvision.transforms as T, torch.nn as nn, torch
+import torchvision, torchvision.transforms as transforms, torch.nn as nn, torch
 from tqdm import tqdm
 from PIL import Image
 from utils.customDatasets import CustomDataset
 
 class ObjectDetector(nn.Module):
-    def __init__(self, type = 'fasterrcnn', labels_path = 'Image_Features/labels.txt', num_classes = 91):
+    def __init__(self, type = 'fasterrcnn', labels_path = 'image_features/labels.txt', num_classes = 91):
         super().__init__()
         self.type = type
         self.model = torchvision.models.detection.fasterrcnn_resnet50_fpn(pretrained = True, num_classes = num_classes).cuda()
@@ -19,13 +19,15 @@ class ObjectDetector(nn.Module):
             return lab_list[:num_classes]
         self.classes = get_classes(num_classes, labels_path)
     
-    def _get_image_from_path(self, path):
+    def get_image_from_path(self, path):
         img = Image.open(path)
-        transform = T.Compose([T.ToTensor()])
-        return transform(img)
-        
-    def forward(self, image, threshold):
-        if type(image) == str: image = self._get_image_from_path(image)
+        return np.asarray(img)
+    
+    def forward(self, image, threshold = 0.2):
+        if type(image) == str:
+            image = self.get_image_from_path(image)
+            trans = transforms.Compose([transforms.ToTensor()])
+            image = trans(image)
         if torch.cuda.is_available(): image = image.cuda()
         pred = self.model([image])
         pred_class = [self.classes[i] for i in list(pred[0]['labels'].detach().cpu().numpy())]
@@ -39,7 +41,7 @@ class ObjectDetector(nn.Module):
         return pred_boxes, pred_class, pred_masks
 
     # Display a plt figure of the bounding boxes highlighted with their associated class labels
-    def display_objects(self, image_path, boxes, class_label, masks, show_label = True, threshold = 0.5, rect_th = 2, text_size = 1, text_th = 2):
+    def display_objects(self, image_path, boxes, class_label, masks, show_label = True, threshold = 0.2, rect_th = 2, text_size = 1, text_th = 2):
         image = cv2.imread(image_path)
         image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
         if masks is not None: 
@@ -59,7 +61,7 @@ class ObjectDetector(nn.Module):
         plt.xticks([]), plt.yticks([]), plt.show()
     
     # Save the image with its bounding boxes and class labels
-    def save_boxed_image(self, image_path, save_path, boxes, class_label, masks, show_label = True, threshold = 0.5, rect_th = 2, text_size = 1, text_th = 2):
+    def save_boxed_image(self, image_path, save_path, boxes, class_label, masks, show_label = True, threshold = 0.2, rect_th = 2, text_size = 1, text_th = 2):
         image = cv2.imread(image_path)
         image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
         if masks is not None: 

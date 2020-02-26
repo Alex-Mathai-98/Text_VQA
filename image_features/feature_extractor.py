@@ -11,7 +11,7 @@ data_transforms = transforms.Compose([transforms.Resize(TARGET_IMAGE_SIZE),
                                       transforms.Normalize(CHANNEL_MEAN, CHANNEL_STD)])
 
 class FinetunedLinear(nn.Module):
-    def __init__(self, in_dim, weights_file = 'fc7_w.pkl', bias_file = 'fc7_b.pkl', model_data_dir = 'Image_Features/pretrained_weights'):
+    def __init__(self, in_dim, weights_file = 'fc7_w.pkl', bias_file = 'fc7_b.pkl', model_data_dir = 'image_features/pretrained_weights'):
         super().__init__()
         if not os.path.isabs(weights_file):
             weights_file = os.path.join(model_data_dir, weights_file)
@@ -29,9 +29,8 @@ class FinetunedLinear(nn.Module):
         self.out_dim = out_dim
 
     def forward(self, image):
-        i2 = self.lc(image)
-        i3 = nn.functional.relu(i2)
-        return i3
+        i2 = self.lc(image) * -1
+        return i2
 
 class ObjectFeatureExtractor(nn.Module):
     def __init__(self, model = 'resnet152'):
@@ -43,17 +42,19 @@ class ObjectFeatureExtractor(nn.Module):
             self.model = self.model.cuda()
         modules = list(self.model.children())[:-1]
         self.feature_module = nn.Sequential(*modules)
-        self.finetuner = FinetunedLinear(2048)
+        self.finetuner = FinetunedLinear(2048).cuda()
 
-    def forward(self, x):
-        transform = data_transforms(x)
+    def forward(self, img):
+        img = Image.fromarray(img) 
+        transform = data_transforms(img)
         if transform.shape[0] == 1:
             transform = transform.expand(3, -1, -1)
         transform = Variable(transform.unsqueeze(0))
         if torch.cuda.is_available():
             transform = transform.cuda()
         extracted_features = self.feature_module(transform).squeeze() 
-        return self.finetuner(extracted_features)
+        finetuned = self.finetuner(extracted_features) 
+        return finetuned
 
 if __name__ == '__main__':
     path = 'Data/test/test_images/c36e1c503400ee40.jpg'
