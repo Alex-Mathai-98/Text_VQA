@@ -9,6 +9,6 @@ class TextModel(nn.Module):
 
         self.bert = BertModel.from_pretrained(checkpoint)
 
-    def forward(self, input_ids, attention_masks):
-        text_embeds = self.bert(input_ids)
+    def forward(self, input_ids, attention_mask):
+        text_embeds = self.bert(input_ids, attention_mask=attention_mask)[0]
         return text_embeds, text_embeds[:, 0, :]
