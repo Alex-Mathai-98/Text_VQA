@@ -18,21 +18,23 @@ class ObjectDetector(nn.Module):
                 lab_list.append(label.rsplit(": ")[1])
             return lab_list[:num_classes]
         self.classes = get_classes(num_classes, labels_path)
-
-    def forward(self, image_path:str, threshold:int):
-        img = Image.open(image_path)
+    
+    def _get_image_from_path(self, path):
+        img = Image.open(path)
         transform = T.Compose([T.ToTensor()])
-        img = transform(img).cuda()
-        pred = self.model([img])
-        pred_class = [self.classes[i] for i in list(pred[0]['labels'].cpu().numpy())]
+        return transform(img)
+        
+    def forward(self, image, threshold):
+        if type(image) == str: image = self._get_image_from_path(image)
+        if torch.cuda.is_available(): image = image.cuda()
+        pred = self.model([image])
+        pred_class = [self.classes[i] for i in list(pred[0]['labels'].detach().cpu().numpy())]
         pred_boxes = [[(i[0], i[1]), (i[2], i[3])] for i in list(pred[0]['boxes'].detach().cpu().numpy())] 
         pred_score = list(pred[0]['scores'].detach().cpu().numpy())
         pred_t = [pred_score.index(x) for x in pred_score if x > threshold][-1] 
-        pred_boxes = pred_boxes[:pred_t+1]
-        pred_class = pred_class[:pred_t+1]
-        pred_masks = None
+        pred_boxes, pred_class, pred_masks = pred_boxes[:pred_t+1], pred_class[:pred_t+1], None
         if self.type == 'maskrcnn':
-            pred_masks = pred[0]['masks'].detach().numpy()
+            pred_masks = pred[0]['masks'].numpy()
             pred_masks = pred_masks[:pred_t+1]
         return pred_boxes, pred_class, pred_masks
 
@@ -75,62 +77,19 @@ class ObjectDetector(nn.Module):
             cv2.imwrite(os.path.join(save_path, image_path.rsplit('/')[-1]), cv2.cvtColor(image, cv2.COLOR_RGB2BGR))
         print("Image saved as {}".format(str(os.path.join(save_path, image_path.rsplit('/')[-1]))))
 
-class FinetuneFasterRcnnFpnFc7(nn.Module):
-    def __init__(self, in_dim, weights_file, bias_file, model_data_dir):
-        super(FinetuneFasterRcnnFpnFc7, self).__init__()
-        pythia_root = get_pythia_root()
-        #model_data_dir = os.path.join(pythia_root, model_data_dir)
-
-        if not os.path.isabs(weights_file):
-            weights_file = os.path.join(model_data_dir, weights_file)
-        if not os.path.isabs(bias_file):
-            bias_file = os.path.join(model_data_dir, bias_file)
-        with open(weights_file, "rb") as w:
-            weights = pickle.load(w)
-        with open(bias_file, "rb") as b:
-            bias = pickle.load(b)
-        out_dim = bias.shape[0]
-
-        self.lc = nn.Linear(in_dim, out_dim)
-        self.lc.weight.data.copy_(torch.from_numpy(weights))
-        self.lc.bias.data.copy_(torch.from_numpy(bias))
-        self.out_dim = out_dim
-
-    def forward(self, image):
-        i2 = self.lc(image)
-        i3 = nn.functional.relu(i2)
-        return i3
-
-def get_pythia_root():
-    from common.registry import registry
-
-    pythia_root = registry.get("pythia_root", no_warning=True)
-    if pythia_root is None:
-        pythia_root = os.path.dirname(os.path.abspath(__file__))
-        pythia_root = os.path.abspath(os.path.join(pythia_root, ".."))
-        registry.register("pythia_root", pythia_root)
-    return pythia_root
-
 if __name__ == '__main__':
     data_path = 'Data'
+    save_dir = 'inference_examples'
+    os.makedirs(save_dir, exist_ok = True)
     ID_path = os.path.join(data_path, "test/test_ids.txt")
     json_path = os.path.join(data_path, "test/cleaned.json")
     dataloader = CustomDataset(data_path, ID_path, json_path, (448, 448), set_="test")
 
     # get_path method has been described below, add method to CustomDataset
-    inference_example = dataloader.get_path(random.randint(0, 2048)) # Any image path to infer model on
-    image = cv2.imread(inference_example)
-    image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)    
-    print(image.shape)
-    obj_det = FinetuneFasterRcnnFpnFc7(2048, 'detectron/fc6/fc7_w.pkl', 'detectron/fc6/fc7_b.pkl', '../pythia/data/')
-    print(obj_det)
-    #object_detector = ObjectDetector(type = 'fasterrcnn')
+    inference_example = dataloader.get_path(random.randint(0, 2048)) # Any image path to infer model on   
+    object_detector = ObjectDetector(type = 'fasterrcnn')
 
-    # threshold (0.4) is the confidence value above which to consider a box relevant ; boxes and class_label are as expected
-    """
-    boxes, class_label, masks = object_detector(inference_example, 0.4)
+    # threshold (0.3) is the confidence value above which to consider a box relevant ; boxes and class_label are as expected
+    boxes, class_label, masks = object_detector(inference_example, 0.3)
     object_detector.display_objects(inference_example, boxes, class_label, masks, show_label = True)
-    save_dir = 'inference_examples'
-    os.makedirs(save_dir, exist_ok = True)
     object_detector.save_boxed_image(inference_example, save_dir, boxes, class_label, masks, show_label = True)
-    """
