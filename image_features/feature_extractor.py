@@ -38,20 +38,16 @@ class ObjectFeatureExtractor(nn.Module):
         if model == 'resnet152':
             self.model = models.resnet152(pretrained = True)
         self.model.eval()
-        if torch.cuda.is_available():
-            self.model = self.model.cuda()
         modules = list(self.model.children())[:-1]
         self.feature_module = nn.Sequential(*modules)
-        self.finetuner = FinetunedLinear(2048).cuda()
+        self.finetuner = FinetunedLinear(2048)
 
-    def forward(self, img):
+    def forward(self, img, device = 1):
         img = Image.fromarray(img) 
         transform = data_transforms(img)
         if transform.shape[0] == 1:
             transform = transform.expand(3, -1, -1)
         transform = Variable(transform.unsqueeze(0))
-        if torch.cuda.is_available():
-            transform = transform.cuda()
         extracted_features = self.feature_module(transform).squeeze() 
         finetuned = self.finetuner(extracted_features) 
         return finetuned

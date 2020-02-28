@@ -1,4 +1,4 @@
-import os ,numpy as np, pickle
+import os ,numpy as np, pickle, gc
 import torch, torch.nn as nn, torchvision
 from tqdm import tqdm
 from argparse import ArgumentParser
@@ -23,13 +23,17 @@ if __name__ == '__main__':
         if args.mode == 'test':
             feature_details = defaultdict()
             feature_details["image_id"], feature_details["path"] = dataloader.get_ID(i), dataloader.get_path(i)
-            feature_details["boxes"], feature_details["classes"], feature_details["masks"] = object_detector(feature_details["path"])
-            feature_details["image"] = object_detector.get_image_from_path(feature_details["path"])
-            feature_details["image_feats"], feature_details["objects"], feature_details["num_objects"] = [], [], len(feature_details["classes"])
-            for box in feature_details["boxes"]:
-                start_point, end_point = box[0], box[1]
-                object_image = feature_details["image"][int(start_point[1]):int(end_point[1]), int(start_point[0]):int(end_point[0]),:]
-                feature_details["objects"].append(object_image)
-                feature_details["image_feats"].append(feature_extractor(object_image))
-            with open(os.path.join(args.save_path, feature_details["image_id"] + '.pkl'), 'wb') as handle:
-                pickle.dump(feature_details, handle, protocol=pickle.HIGHEST_PROTOCOL)
+            try:
+                feature_details["boxes"], feature_details["classes"], feature_details["masks"] = object_detector(feature_details["path"])
+                feature_details["image"] = object_detector.get_image_from_path(feature_details["path"])
+                feature_details["image_feats"], feature_details["objects"], feature_details["num_objects"] = [], [], len(feature_details["classes"])
+                for box in feature_details["boxes"]:
+                    start_point, end_point = box[0], box[1]
+                    object_image = feature_details["image"][int(start_point[1]):int(end_point[1]), int(start_point[0]):int(end_point[0]),:]
+                    feature_details["objects"].append(object_image)
+                    feature_details["image_feats"].append(feature_extractor(object_image))
+                    with open(os.path.join(args.save_path, feature_details["image_id"] + '.pkl'), 'wb') as handle:
+                        pickle.dump(feature_details, handle, protocol=pickle.HIGHEST_PROTOCOL)
+                    gc.collect()
+            except:
+                print("No relevant objects  found in the images")

@@ -8,9 +8,9 @@ class ObjectDetector(nn.Module):
     def __init__(self, type = 'fasterrcnn', labels_path = 'image_features/labels.txt', num_classes = 91):
         super().__init__()
         self.type = type
-        self.model = torchvision.models.detection.fasterrcnn_resnet50_fpn(pretrained = True, num_classes = num_classes).cuda()
+        self.model = torchvision.models.detection.fasterrcnn_resnet50_fpn(pretrained = True, num_classes = num_classes)
         if self.type == 'maskrcnn': 
-            self.model = torchvision.models.detection.maskrcnn_resnet50_fpn(pretrained = True, num_classes = num_classes).cuda()
+            self.model = torchvision.models.detection.maskrcnn_resnet50_fpn(pretrained = True, num_classes = num_classes)
         self.model.eval()
         def get_classes(num_classes, file):
             lab_file, lab_list = open(file), []
@@ -23,12 +23,11 @@ class ObjectDetector(nn.Module):
         img = Image.open(path)
         return np.asarray(img)
     
-    def forward(self, image, threshold = 0.2):
+    def forward(self, image, threshold = 0.1, device = 0):
         if type(image) == str:
             image = self.get_image_from_path(image)
             trans = transforms.Compose([transforms.ToTensor()])
             image = trans(image)
-        if torch.cuda.is_available(): image = image.cuda()
         pred = self.model([image])
         pred_class = [self.classes[i] for i in list(pred[0]['labels'].detach().cpu().numpy())]
         pred_boxes = [[(i[0], i[1]), (i[2], i[3])] for i in list(pred[0]['boxes'].detach().cpu().numpy())] 
