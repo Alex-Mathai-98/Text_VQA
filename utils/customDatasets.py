@@ -52,25 +52,33 @@ class CustomDataset(data.Dataset):
 		'Generates one sample of data'
 
 		# Select sample
-		ID = self.cleaned_json["image_ids"][self.list_IDs[index]]
+		ID = list(self.cleaned_json["image_classes"].keys())[index]
+		# Iterating through test set showed that dictionary key "image_ids does not exist"
+		#ID = self.cleaned_json["image_ids"][self.list_IDs[index]]
 		# print (ID)
 		# Load image
-		X = Image.open(os.path.join(data_path,self.set_+"/" + self.set_ + "_images/"+ID+".jpg"))
+		X = Image.open(os.path.join(self.data_path, self.set_+"/" + self.set_ + "_images/"+ID+".jpg"))
 		
 		if X.mode != 'RGB' :
 			X = X.convert('RGB')
-
+			
+		transform = transforms.ToTensor()
+		image = transform(X)
 		X = self.color_transforms(X)
 
 		# Load question
 		q = self.cleaned_json["question"][self.list_IDs[index]]
 
-		if self.set_ == "test" :
-			return X,q
+		if self.set_ == "test":
+			if torch.cuda.is_available():
+				image = image.cuda()
+			return image, X ,q, index
 		else :
 			# Load Label
 			y = self.cleaned_json["answers"][self.list_IDs[index]][0]
-			return X,q,y
+			if torch.cuda.is_available():
+				image = image.cuda()
+			return image, X, q, y, index
 
 
 if __name__ == '__main__' :

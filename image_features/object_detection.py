@@ -4,7 +4,7 @@ from tqdm import tqdm
 from PIL import Image
 from utils.customDatasets import CustomDataset
 
-class ObjectDetector(nn.Module):
+class NaiveObjectDetector(nn.Module):
     def __init__(self, type = 'fasterrcnn', labels_path = 'image_features/labels.txt', num_classes = 91):
         super().__init__()
         self.type = type
@@ -23,7 +23,7 @@ class ObjectDetector(nn.Module):
         img = Image.open(path)
         return np.asarray(img)
     
-    def forward(self, image, threshold = 0.1, device = 0):
+    def forward(self, image, threshold = 0.1):
         if type(image) == str:
             image = self.get_image_from_path(image)
             trans = transforms.Compose([transforms.ToTensor()])
