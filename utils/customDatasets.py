@@ -46,6 +46,9 @@ class CustomDataset(data.Dataset):
 		'Denotes the total number of samples'
 		return len(self.list_IDs)
 	
+	def get_ID(self, index):
+		return self.list_IDs[index]
+
 	def get_path(self, index):
 		ID = self.list_IDs[index]
 		return str(os.path.join(self.data_path, self.set_+"/" + self.set_ + "_images/"+ID+".jpg"))
@@ -54,14 +57,18 @@ class CustomDataset(data.Dataset):
 		'Generates one sample of data'
 
 		# Select sample
-		ID = self.cleaned_json["image_ids"][self.list_IDs[index]]
+		ID = list(self.cleaned_json["image_classes"].keys())[index]
+		# Iterating through test set showed that dictionary key "image_ids does not exist"
+		#ID = self.cleaned_json["image_ids"][self.list_IDs[index]]
 		# print (ID)
 		# Load image
-		X = Image.open(os.path.join(data_path,self.set_+"/" + self.set_ + "_images/"+ID+".jpg"))
+		X = Image.open(os.path.join(self.data_path, self.set_+"/" + self.set_ + "_images/"+ID+".jpg"))
 		
 		if X.mode != 'RGB' :
 			X = X.convert('RGB')
-
+			
+		transform = transforms.ToTensor()
+		image = transform(X)
 		X = self.color_transforms(X)
 
 		# Load question
@@ -69,12 +76,16 @@ class CustomDataset(data.Dataset):
 		q_tokens = self.tokenizer.encode(q)
 		q_len = len(q_tokens)
 
-		if self.set_ == "test" :
-			return X,q
+		if self.set_ == "test":
+			if torch.cuda.is_available():
+				image = image.cuda()
+			return image, X ,q, index, q_tokens, q_len
 		else :
 			# Load Label
 			y = self.cleaned_json["answers"][self.list_IDs[index]][0]
-			return X, q, y, q_tokens, q_len
+			if torch.cuda.is_available():
+				image = image.cuda()
+			return image, X, q, y, index, q_tokens, q_len
 
 
 if __name__ == '__main__' :
