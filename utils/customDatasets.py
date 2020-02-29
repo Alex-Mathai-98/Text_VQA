@@ -7,10 +7,14 @@ import os
 import numpy as np
 import tqdm
 from transformers import BertTokenizer, BertModel
+import pickle
+
+with open('oov_tokens.pkl', 'rb') as f:
+    SPECIAL_TOKENS = pickle.load(f)
 
 class CustomDataset(data.Dataset):
 	'Characterizes a dataset for PyTorch'
-	def __init__(self, data_path, ID_path,json_path,target_image_size,set_="train"):
+	def __init__(self, data_path, ID_path,json_path,target_image_size,set_="train", tokenizer=None):
 		'Initialization'
 		self.data_path = data_path
 		self.cleaned_json = self.read_Json(json_path)
@@ -19,6 +23,7 @@ class CustomDataset(data.Dataset):
 		self.set_ = set_
 		self.channel_mean = [0.485, 0.456, 0.406]
 		self.channel_std = [0.229, 0.224, 0.225]
+		self.tokenizer = tokenizer
 
 		self.color_transforms = transforms.Compose([
 				transforms.Resize(self.target_image_size),
@@ -61,13 +66,15 @@ class CustomDataset(data.Dataset):
 
 		# Load question
 		q = self.cleaned_json["question"][self.list_IDs[index]]
+		q_tokens = self.tokenizer.encode(q)
+		q_len = len(q_tokens)
 
 		if self.set_ == "test" :
 			return X,q
 		else :
 			# Load Label
 			y = self.cleaned_json["answers"][self.list_IDs[index]][0]
-			return X,q,y
+			return X, q, y, q_tokens, q_len
 
 
 if __name__ == '__main__' :
@@ -75,9 +82,9 @@ if __name__ == '__main__' :
 	data_path = "/home/alex/Desktop/4-2/Text_VQA/Data/"
 	ID_path = os.path.join(data_path,"train/train_ids.txt")
 	json_path = os.path.join(data_path,"train/cleaned.json")
-	alex = CustomDataset(data_path,ID_path,json_path,(448,448),set_="train")
-	tks = BertTokenizer.from_pretrained('bert-base-uncased', do_lower_case=True)
-	bert_model = BertModel.from_pretrained('bert-base-uncased')
+	tokenizer = BertTokenizer.from_pretrained('bert-base-uncased', do_lower_case=True)
+	tokenizer.add_tokens(SPECIAL_TOKENS)
+	alex = CustomDataset(data_path,ID_path,json_path,(448,448),set_="train", tokenizer=tokenizer)
 	total = 0
 	issue = 0
 			
