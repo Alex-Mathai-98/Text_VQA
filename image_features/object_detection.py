@@ -23,7 +23,7 @@ class NaiveObjectDetector(nn.Module):
         img = Image.open(path)
         return np.asarray(img)
     
-    def forward(self, image, threshold = 0.1):
+    def forward(self, image, threshold):
         if type(image) == str:
             image = self.get_image_from_path(image)
             trans = transforms.Compose([transforms.ToTensor()])
@@ -32,7 +32,13 @@ class NaiveObjectDetector(nn.Module):
         pred_class = [self.classes[i] for i in list(pred[0]['labels'].detach().cpu().numpy())]
         pred_boxes = [[(i[0], i[1]), (i[2], i[3])] for i in list(pred[0]['boxes'].detach().cpu().numpy())] 
         pred_score = list(pred[0]['scores'].detach().cpu().numpy())
-        pred_t = [pred_score.index(x) for x in pred_score if x > threshold][-1] 
+        # Make sure that the threshold is not more than all the object scores, since then no objects would show up at all
+        while(True):
+            try:
+                pred_t = [pred_score.index(x) for x in pred_score if x > threshold][-1] 
+                break
+            except IndexError:
+                threshold -= 0.05
         pred_boxes, pred_class, pred_masks = pred_boxes[:pred_t+1], pred_class[:pred_t+1], None
         if self.type == 'maskrcnn':
             pred_masks = pred[0]['masks'].numpy()
@@ -40,7 +46,7 @@ class NaiveObjectDetector(nn.Module):
         return pred_boxes, pred_class, pred_masks
 
     # Display a plt figure of the bounding boxes highlighted with their associated class labels
-    def display_objects(self, image_path, boxes, class_label, masks, show_label = True, threshold = 0.2, rect_th = 2, text_size = 1, text_th = 2):
+    def display_objects(self, image_path, boxes, class_label, masks, show_label = False, rect_th = 2, text_size = 1, text_th = 2):
         image = cv2.imread(image_path)
         image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
         if masks is not None: 
@@ -60,7 +66,7 @@ class NaiveObjectDetector(nn.Module):
         plt.xticks([]), plt.yticks([]), plt.show()
     
     # Save the image with its bounding boxes and class labels
-    def save_boxed_image(self, image_path, save_path, boxes, class_label, masks, show_label = True, threshold = 0.2, rect_th = 2, text_size = 1, text_th = 2):
+    def save_boxed_image(self, image_path, save_path, boxes, class_label, masks, show_label = True, rect_th = 2, text_size = 1, text_th = 2):
         image = cv2.imread(image_path)
         image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
         if masks is not None: 
@@ -88,9 +94,9 @@ if __name__ == '__main__':
 
     # get_path method has been described below, add method to CustomDataset
     inference_example = dataloader.get_path(random.randint(0, 2048)) # Any image path to infer model on   
-    object_detector = ObjectDetector(type = 'fasterrcnn')
+    object_detector = NaiveObjectDetector(type = 'fasterrcnn')
 
     # threshold (0.3) is the confidence value above which to consider a box relevant ; boxes and class_label are as expected
-    boxes, class_label, masks = object_detector(inference_example, 0.3)
-    object_detector.display_objects(inference_example, boxes, class_label, masks, show_label = True)
-    object_detector.save_boxed_image(inference_example, save_dir, boxes, class_label, masks, show_label = True)
+    boxes, class_label, masks = object_detector(inference_example, 0.4)
+    object_detector.display_objects(inference_example, boxes, class_label, masks)
+#    object_detector.save_boxed_image(inference_example, save_dir, boxes, class_label, masks, show_label = True)
