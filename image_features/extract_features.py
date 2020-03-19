@@ -1,6 +1,6 @@
 import os ,numpy as np, pickle, gc
 import torch, torch.nn as nn, torchvision
-from tqdm import tqdm
+from tqdm import tqdm 
 from argparse import ArgumentParser
 from collections import defaultdict
 from utils.customDatasets import CustomDataset
@@ -17,12 +17,13 @@ if __name__ == '__main__':
     args = parser.parse_args()
     os.makedirs(args.save_path, exist_ok = True)
     dataloader = CustomDataset(args.data_path, args.id_path, args.json_path, (448, 448), set_= args.mode)
-    object_detector, feature_extractor = NaiveObjectDetector().cuda(), NaiveObjectFeatureExtractor().cuda(1)
+    object_detector, feature_extractor = NaiveObjectDetector(), NaiveObjectFeatureExtractor()
+    if torch.cuda.is_available(): object_detector, feature_extractor = NaiveObjectDetector().cuda(), NaiveObjectFeatureExtractor().cuda(1)
    
     for  data in tqdm(dataloader):
         if args.mode == 'test':
             feature_details = defaultdict()
-            feature_details["image"], feature_details["transformed_image"], feature_details["question"], feature_details["index"] = data
+            feature_details["image"], feature_details["transformed_image"], feature_details["question"], feature_details["index"], _, _ = data
             feature_details["image_id"], feature_details["path"] = dataloader.get_ID(feature_details["index"]), dataloader.get_path(feature_details["index"])
             try: feature_details["boxes"], feature_details["classes"], feature_details["masks"] = object_detector(feature_details["image"], threshold = 0.2)
             except:

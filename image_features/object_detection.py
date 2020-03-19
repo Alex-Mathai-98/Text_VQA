@@ -46,27 +46,7 @@ class NaiveObjectDetector(nn.Module):
         return pred_boxes, pred_class, pred_masks
 
     # Display a plt figure of the bounding boxes highlighted with their associated class labels
-    def display_objects(self, image_path, boxes, class_label, masks, show_label = False, rect_th = 2, text_size = 1, text_th = 2):
-        image = cv2.imread(image_path)
-        image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
-        if masks is not None: 
-            all_masks = np.zeros_like((np.vstack([masks[0]] * 3)).transpose(1, 2, 0))
-            for i, mask in enumerate(masks):
-                mask = (np.vstack([mask] * 3)).transpose(1, 2, 0) * 255
-                all_masks += np.uint8(mask)
-        for i in range(len(boxes)):
-            cv2.rectangle(image, boxes[i][0], boxes[i][1],color=(255, 0, 0), thickness=rect_th)
-            if show_label:
-                cv2.putText(image,class_label[i], boxes[i][0],  cv2.FONT_HERSHEY_SIMPLEX, text_size, (0,255,0),thickness=text_th)
-        plt.figure(figsize = (20, 30))
-        if masks is not None:
-            plt.imshow(np.hstack([image / 255.0, all_masks]))
-        else:
-            plt.imshow(image)
-        plt.xticks([]), plt.yticks([]), plt.show()
-    
-    # Save the image with its bounding boxes and class labels
-    def save_boxed_image(self, image_path, save_path, boxes, class_label, masks, show_label = True, rect_th = 2, text_size = 1, text_th = 2):
+    def display_objects(self, image_path, boxes, class_label, masks, show_label = False, rect_th = 1, text_size = 1, text_th = 1, save_path = None):
         image = cv2.imread(image_path)
         image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
         if masks is not None: 
@@ -78,12 +58,20 @@ class NaiveObjectDetector(nn.Module):
             cv2.rectangle(image, boxes[i][0], boxes[i][1],color=(0, 255, 0), thickness=rect_th)
             if show_label:
                 cv2.putText(image,class_label[i], boxes[i][0],  cv2.FONT_HERSHEY_SIMPLEX, text_size, (0,255,0),thickness=text_th)
+        plt.figure(figsize = (20, 30))
         if masks is not None:
-            cv2.imwrite(os.path.join(save_path, image_path.rsplit('/')[-1]), cv2.cvtColor(np.hstack([image, all_masks]), cv2.COLOR_RGB2BGR))
+            plt.imshow(np.hstack([image / 255.0, all_masks]))
         else:
-            cv2.imwrite(os.path.join(save_path, image_path.rsplit('/')[-1]), cv2.cvtColor(image, cv2.COLOR_RGB2BGR))
-        print("Image saved as {}".format(str(os.path.join(save_path, image_path.rsplit('/')[-1]))))
-
+            plt.imshow(image)
+        plt.xticks([]), plt.yticks([]), plt.show()
+    
+        if save_path != None:
+            if masks is not None:
+                cv2.imwrite(os.path.join(save_path, image_path.rsplit('/')[-1]), cv2.cvtColor(np.hstack([image, all_masks]), cv2.COLOR_RGB2BGR))
+            else:
+                cv2.imwrite(os.path.join(save_path, image_path.rsplit('/')[-1]), cv2.cvtColor(image, cv2.COLOR_RGB2BGR))
+            print("Image saved as {}".format(str(os.path.join(save_path, image_path.rsplit('/')[-1]))))
+        
 if __name__ == '__main__':
     data_path = 'Data'
     save_dir = 'inference_examples'
@@ -96,7 +84,6 @@ if __name__ == '__main__':
     inference_example = dataloader.get_path(random.randint(0, 2048)) # Any image path to infer model on   
     object_detector = NaiveObjectDetector(type = 'fasterrcnn')
 
-    # threshold (0.3) is the confidence value above which to consider a box relevant ; boxes and class_label are as expected
-    boxes, class_label, masks = object_detector(inference_example, 0.4)
+    # threshold (0.4) is the confidence value above which to consider a box relevant ; boxes and class_label are as expected
+    boxes, class_label, masks = object_detector(inference_example, 0.25)
     object_detector.display_objects(inference_example, boxes, class_label, masks)
-#    object_detector.save_boxed_image(inference_example, save_dir, boxes, class_label, masks, show_label = True)

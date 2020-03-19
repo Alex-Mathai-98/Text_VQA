@@ -24,6 +24,7 @@ class NaiveObjectFeatureExtractor(nn.Module):
         img = data_transforms(img.cpu())
         if img.shape[0] == 1:
             img = img.expand(3, -1, -1)
-        transform = Variable(img.unsqueeze(0)).cuda(1)
+        transform = Variable(img.unsqueeze(0))
+        if torch.cuda.is_available(): transform = transform.cuda(1)
         extracted_features = self.feature_module(transform).squeeze() 
         return extracted_features.detach()
