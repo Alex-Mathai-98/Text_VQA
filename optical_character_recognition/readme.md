@@ -18,6 +18,4 @@ Image with boxes           |  Heat map of letter probs
 :-------------------------:|:-------------------------:
 ![](https://github.com/Alex-Mathai-98/Text_VQA/blob/master/optical_character_recognition/inference_examples/detection_754c36b7179116de.jpg)  |  ![](https://github.com/Alex-Mathai-98/Text_VQA/blob/master/optical_character_recognition/inference_examples/letter_heatmap_754c36b7179116de.jpg)
 
-Image with boxes           |  Heat map of letter probs
-:-------------------------:|:-------------------------:
 ![](https://github.com/Alex-Mathai-98/Text_VQA/blob/master/optical_character_recognition/inference_examples/detection_b00478eb3c722013.jpg  |  ![](https://github.com/Alex-Mathai-98/Text_VQA/blob/master/optical_character_recognition/inference_examples/letter_heatmap_b00478eb3c722013.jpg)
