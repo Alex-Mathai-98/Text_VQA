@@ -8,10 +8,10 @@ import numpy as np
 import tqdm
 from transformers import BertTokenizer, BertModel
 import pickle
-
+"""
 with open('oov_tokens.pkl', 'rb') as f:
     SPECIAL_TOKENS = pickle.load(f)
-
+"""
 class CustomDataset(data.Dataset):
 	'Characterizes a dataset for PyTorch'
 	def __init__(self, data_path, ID_path,json_path,target_image_size,set_="train", tokenizer=None):
@@ -73,8 +73,11 @@ class CustomDataset(data.Dataset):
 
 		# Load question
 		q = self.cleaned_json["question"][self.list_IDs[index]]
-		q_tokens = self.tokenizer.encode(q)
-		q_len = len(q_tokens)
+		q_tokens = None
+		q_len = 0 
+		if self.tokenizer != None:				
+			q_tokens = self.tokenizer.encode(q)
+			q_len = len(q_tokens)
 
 		if self.set_ == "test":
 			if torch.cuda.is_available():

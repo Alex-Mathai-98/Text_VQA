@@ -228,7 +228,7 @@ def list_files(in_path):
                 continue
     return img_files, mask_files, gt_files
 
-def display_texts(img_file, img, boxes, dirname='./inference_examples/'):
+def display(img_file, img, boxes, dirname='./inference_examples/'):
         img = np.array(img)
         filename, _ = os.path.splitext(os.path.basename(img_file))
         result = dirname + "detection_" + filename + '.jpg'

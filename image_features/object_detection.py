@@ -46,7 +46,7 @@ class NaiveObjectDetector(nn.Module):
         return pred_boxes, pred_class, pred_masks
 
     # Display a plt figure of the bounding boxes highlighted with their associated class labels
-    def display_objects(self, image_path, boxes, class_label, masks, show_label = False, rect_th = 1, text_size = 1, text_th = 1, save_path = None):
+    def display_objects(self, image_path, boxes, class_label, masks, show_label = False, rect_th = 2, text_size = 2, text_th = 2, save_path = None):
         image = cv2.imread(image_path)
         image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
         if masks is not None: 

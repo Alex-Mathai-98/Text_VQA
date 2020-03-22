@@ -21,8 +21,7 @@ def copyStateDict(state_dict):
 def str2bool(v):
     return v.lower() in ("yes", "y", "true", "t", "1")
 
-def test_net(net, image, text_threshold, link_threshold, low_text, cuda, poly, canvas_size, mag_ratio, refine_net=None):
-    t0 = time.time()
+def text_detector(net, image, text_threshold = 0.7, link_threshold = 0.4, low_text = 0.4, cuda = torch.cuda.is_available(), poly = False, canvas_size = 1280, mag_ratio = 1.5, refine_net=None):
     img_resized, target_ratio, size_heatmap = utils.resize_aspect_ratio(image, canvas_size, interpolation=cv2.INTER_LINEAR, mag_ratio=mag_ratio)
     ratio_h = ratio_w = 1 / target_ratio
     x = utils.normalizeMeanVariance(img_resized)
@@ -44,8 +43,6 @@ def test_net(net, image, text_threshold, link_threshold, low_text, cuda, poly, c
         with torch.no_grad():
             y_refiner = refine_net(y, feature)
         score_link = y_refiner[0,:,:,0].cpu().data.numpy()
-    t0 = time.time() - t0
-    t1 = time.time()
 
     # Post-processing
     boxes, polys = utils.getDetBoxes(score_text, score_link, text_threshold, link_threshold, low_text, poly)
@@ -55,7 +52,6 @@ def test_net(net, image, text_threshold, link_threshold, low_text, cuda, poly, c
     polys = utils.adjustResultCoordinates(polys, ratio_w, ratio_h)
     for k in range(len(polys)):
         if polys[k] is None: polys[k] = boxes[k]
-    t1 = time.time() - t1
 
     # render results (optional)
     render_img = score_text.copy()
@@ -74,7 +70,7 @@ if __name__ == '__main__':
     parser.add_argument('--mag_ratio', default=1.5, type=float, help='image magnification ratio')
     parser.add_argument('--poly', default=False, action='store_true', help='enable polygon type')
     parser.add_argument('--show_time', default=False, action='store_true', help='show processing time')
-    parser.add_argument('--test_folder', default='/data/', type=str, help='folder path to input images')
+    parser.add_argument('--test_folder', default='Data/test/test_images/', type=str, help='folder path to input images')
     parser.add_argument('--refine', default=False, action='store_true', help='enable link refiner')
     parser.add_argument('--refiner_model', default='weights/craft_refiner_CTW1500.pth', type=str, help='pretrained refiner model')
     args = parser.parse_args()
@@ -83,6 +79,7 @@ if __name__ == '__main__':
     if not os.path.isdir(result_folder):
         os.mkdir(result_folder)
 
+    t0 = time.time()
     net = CRAFT()
     if args.cuda:
         net.load_state_dict(copyStateDict(torch.load(args.trained_model)))
@@ -106,14 +103,13 @@ if __name__ == '__main__':
             refine_net.load_state_dict(copyStateDict(torch.load(args.refiner_model, map_location='cpu')))
         refine_net.eval()
         args.poly = True
-    t = time.time()
     
     image_root = args.test_folder
     image_dir = os.listdir(image_root)
     image_path = os.path.join(image_root, random.choice(image_dir))
     image = utils.loadImage(image_path)
-    bboxes, polys, score_text = test_net(net, image, args.text_threshold, args.link_threshold, args.low_text, args.cuda, args.poly, args.canvas_size, args.mag_ratio, refine_net = None)
+    bboxes, polys, score_text = text_detector(net, image, args.text_threshold, args.link_threshold, args.low_text, args.cuda, args.poly, args.canvas_size, args.mag_ratio, refine_net = None)
     filename, file_ext = os.path.splitext(os.path.basename(image_path))
     mask_file = result_folder + "/letter_heatmap_" + filename + '.jpg'
     cv2.imwrite(mask_file, score_text)
-    utils.display_texts(image_path, image[:,:,::-1], polys, dirname=result_folder)
+    utils.display(image_path, image[:,:,::-1], polys, dirname=result_folder)
