@@ -3,10 +3,19 @@ import torch, torch.nn as nn, torchvision.transforms as transforms
 from skimage import io
 from torch.autograd import Variable
 from PIL import Image
+from collections import OrderedDict
 
 def warpCoord(Minv, pt):
     out = np.matmul(Minv, (pt[0], pt[1], 1))
     return np.array([out[0]/out[2], out[1]/out[2]])
+
+def crop_polygon(image, points):
+    mask = np.zeros(image.shape, dtype=np.uint8)
+    channel_count = image.shape[2]
+    ignore_mask_color = (255,) * channel_count
+    cv2.fillPoly(mask, [points], ignore_mask_color)
+    masked_image = cv2.bitwise_and(image, mask)
+    return masked_image
 
 def getDetBoxes_core(textmap, linkmap, text_threshold, link_threshold, low_text):
     linkmap = linkmap.copy()
@@ -440,6 +449,17 @@ def assureRatio(img):
         main = nn.UpsamplingBilinear2d(size=(h, h), scale_factor=None)
         img = main(img)
     return img
+
+def copyStateDict(state_dict):
+    if list(state_dict.keys())[0].startswith("module"):
+        start_idx = 1
+    else:
+        start_idx = 0
+    new_state_dict = OrderedDict()
+    for k, v in state_dict.items():
+        name = ".".join(k.split(".")[start_idx:])
+        new_state_dict[name] = v
+    return new_state_dict
 
 class resizeNormalize(object):
 

@@ -15,8 +15,9 @@ class TextRecognition(nn.Module):
         self.transformer = utils.resizeNormalize((100, 32))
         self.model.eval()
 
-    def forward(self, image_path):
-        image = Image.open(image_path).convert('L')
+    def forward(self, image):
+        image = Image.fromarray(image)
+        image = image.convert('L')
         image = self.transformer(image)
         if torch.cuda.is_available():
             image = image.cuda()

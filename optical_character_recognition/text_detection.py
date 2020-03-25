@@ -5,21 +5,6 @@ from torch.autograd import Variable
 from PIL import Image
 from skimage import io
 from optical_character_recognition.models import CRAFT
-from collections import OrderedDict
-
-def copyStateDict(state_dict):
-    if list(state_dict.keys())[0].startswith("module"):
-        start_idx = 1
-    else:
-        start_idx = 0
-    new_state_dict = OrderedDict()
-    for k, v in state_dict.items():
-        name = ".".join(k.split(".")[start_idx:])
-        new_state_dict[name] = v
-    return new_state_dict
-
-def str2bool(v):
-    return v.lower() in ("yes", "y", "true", "t", "1")
 
 class TextDetection(nn.Module):
     def __init__(self, trained_model = 'optical_character_recognition/pretrained_models/craft_mlt_25k.pth', refine = False, model = 'CRAFT', refiner_model = None, poly = False):
@@ -32,12 +17,12 @@ class TextDetection(nn.Module):
             self.model = CRAFT()  
         
         if torch.cuda.is_available():
-            self.model.load_state_dict(copyStateDict(torch.load(self.trained_model)))
+            self.model.load_state_dict(utils.copyStateDict(torch.load(self.trained_model)))
             self.model = self.model.cuda()
             self.model = torch.nn.DataParallel(self.model)
             cudnn.benchmark = False
         else:
-            self.model.load_state_dict(copyStateDict(torch.load(self.trained_model, map_location='cpu')))
+            self.model.load_state_dict(utils.copyStateDict(torch.load(self.trained_model, map_location='cpu')))
         self.model.eval()
         
         if self.refine:
@@ -45,11 +30,11 @@ class TextDetection(nn.Module):
             refine_net = RefineNet()
             print('Loading weights of refiner from checkpoint (' + self.refiner_model + ')')
             if torch.cuda.is_available():
-                refine_net.load_state_dict(copyStateDict(torch.load(self.refiner_model)))
+                refine_net.load_state_dict(utils.copyStateDict(torch.load(self.refiner_model)))
                 refine_net = refine_net.cuda()
                 refine_net = torch.nn.DataParallel(refine_net)
             else:
-                refine_net.load_state_dict(copyStateDict(torch.load(self.refiner_model, map_location='cpu')))
+                refine_net.load_state_dict(utils.copyStateDict(torch.load(self.refiner_model, map_location='cpu')))
             refine_net.eval()
             self.poly = True
 
