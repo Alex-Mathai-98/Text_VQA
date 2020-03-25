@@ -22,7 +22,7 @@ def str2bool(v):
     return v.lower() in ("yes", "y", "true", "t", "1")
 
 class TextDetection(nn.Module):
-    def __init__(self, trained_model, refine = False, model = 'CRAFT', refiner_model = None, poly = False):
+    def __init__(self, trained_model = 'optical_character_recognition/pretrained_models/craft_mlt_25k.pth', refine = False, model = 'CRAFT', refiner_model = None, poly = False):
         super().__init__()
         self.refine = refine
         self.refiner_model = refiner_model
@@ -119,7 +119,5 @@ if __name__ == '__main__':
     image_dir = os.listdir(image_root)
     image_path = os.path.join(image_root, random.choice(image_dir))
     
-    text_detector = TextDetection(args.trained_model).cuda()
-    boxes, polys, ret_score_text = text_detector(image_path)
-    breakpoint()
-    #text_detector.display(image_path, result_folder)
+    text_detector = TextDetection().cuda()
+    text_detector.display(image_path, result_folder)

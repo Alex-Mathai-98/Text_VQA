@@ -1,35 +1,37 @@
-import torch
+import torch, torch.nn as nn
 from optical_character_recognition import utils, models
 from torch.autograd import Variable
 from PIL import Image
 
-model_path = './optical_character_recognition/pretrained_models/crnn.pth'
-img_path = './Data/demos/demo_2.jpg'
-alphabet = '0123456789abcdefghijklmnopqrstuvwxyz'
+class TextRecognition(nn.Module):
+    def __init__(self, model_path = './optical_character_recognition/pretrained_models/crnn.pth', alphabet = '0123456789abcdefghijklmnopqrstuvwxyz', model = 'CRNN'):
+        super().__init__()
+        if model == 'CRNN':
+            self.model = models.CRNN(32, 1, 37, 256)
+        if torch.cuda.is_available():
+            self.model = self.model.cuda()
+        self.model.load_state_dict(torch.load(model_path))
+        self.converter = utils.strLabelConverter(alphabet)
+        self.transformer = utils.resizeNormalize((100, 32))
+        self.model.eval()
 
-model = models.CRNN(32, 1, 37, 256)
-if torch.cuda.is_available():
-    model = model.cuda()
-print('loading pretrained model from %s' % model_path)
-model.load_state_dict(torch.load(model_path))
+    def forward(self, image_path):
+        image = Image.open(image_path).convert('L')
+        image = self.transformer(image)
+        if torch.cuda.is_available():
+            image = image.cuda()
+        image = image.view(1, *image.size())
+        image = Variable(image)
+        predictions = self.model(image)
+        _, predictions = predictions.max(2)
+        predictions = predictions.transpose(1, 0).contiguous().view(-1)
+        preds_size = Variable(torch.IntTensor([predictions.size(0)]))
+        raw_pred = self.converter.decode(predictions.data, preds_size.data, raw=True)
+        sim_pred = self.converter.decode(predictions.data, preds_size.data, raw=False)
+        return raw_pred, sim_pred
 
-converter = utils.strLabelConverter(alphabet)
-
-transformer = utils.resizeNormalize((100, 32))
-image = Image.open(img_path).convert('L')
-image = transformer(image)
-if torch.cuda.is_available():
-    image = image.cuda()
-image = image.view(1, *image.size())
-image = Variable(image)
-
-model.eval()
-preds = model(image)
-
-_, preds = preds.max(2)
-preds = preds.transpose(1, 0).contiguous().view(-1)
-
-preds_size = Variable(torch.IntTensor([preds.size(0)]))
-raw_pred = converter.decode(preds.data, preds_size.data, raw=True)
-sim_pred = converter.decode(preds.data, preds_size.data, raw=False)
-print('%-20s => %-20s' % (raw_pred, sim_pred))
+if __name__ == '__main__':
+    img_path = './Data/demos/demo_2.jpg'
+    text_recognizer = TextRecognition()
+    raw_pred, sim_pred = text_recognizer(img_path)
+    breakpoint()
