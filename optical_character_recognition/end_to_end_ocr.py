@@ -44,7 +44,7 @@ if __name__ == '__main__':
 
     # Parse single argument for custom image path
     parser = argparse.ArgumentParser(description='Complete end-to-end OCR inference')
-    parser.add_argument('--image_path', default='Data/test/test_images/', type=str, help='folder path to input images')
+    parser.add_argument('--image_path', default='Data/demos/', type=str, help='folder path to input images')
     args = parser.parse_args()
 
     # If directory, get random image in that directory otherwise just use the image path given
