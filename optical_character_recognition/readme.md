@@ -21,3 +21,19 @@ Image with boxes           |  Heat map of letter probs
 Image with boxes           |  Heat map of letter probs
 :-------------------------:|:-------------------------:
 ![](https://github.com/Alex-Mathai-98/Text_VQA/blob/master/optical_character_recognition/inference_examples/detection_b00478eb3c722013.jpg)  |  ![](https://github.com/Alex-Mathai-98/Text_VQA/blob/master/optical_character_recognition/inference_examples/letter_heatmap_b00478eb3c722013.jpg)
+
+## Text Recognition 
+Once text detection is done, the polygons are cropped containing the text, and passed through a text recognition model. Text recognition model used is CRNN. Run using - 
+    python -m optical_character_recognition.end_to_end_ocr # For random image
+    python -m optical_character_recognition.end_to_end_ocr --image_path=/path/to/img/or/dir # If img then that image, if dir then random image within that dir
+  
+Some demonstrations are below
+| ![dialogue](https://github.com/Alex-Mathai-98/Text_VQA/blob/master/optical_character_recognition/inference_examples/demonstration2.png) |
+|:-------------------------------------------------------------------------------------------------:|
+| Demonstration 1 |
+
+| ![dialogue](https://github.com/Alex-Mathai-98/Text_VQA/blob/master/optical_character_recognition/inference_examples/demonstration1.png) |
+|:-------------------------------------------------------------------------------------------:|
+| Demonstration 2 |
+   
+Some results of the complete end to end OCR pipeline are below -
