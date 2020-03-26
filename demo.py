@@ -50,9 +50,9 @@ class LoRRADemo:
   
   def build(self):
     self._init_processors()
-    self.pythia_model = self._build_pythia_model()
-    self.detection_model = self._build_detection_model()
-    self.resnet_model = self._build_resnet_model()
+    self.pythia_model = self._build_pythia_model().cuda()
+    self.detection_model = self._build_detection_model().cuda()
+    self.resnet_model = self._build_resnet_model().cuda()
        
   def _init_processors(self):
     config = self.config
@@ -73,8 +73,19 @@ class LoRRADemo:
                       self.answer_processor.get_vocab_size())
   
   def init_ocr_processor(self):
-    self.ocr_token_processor = EndToEndOCR()
+    with open("demo_model_data/lorra.yaml") as f:
+      config = yaml.load(f)
     
+    config = ConfigNode(config)
+    # Remove warning
+    config.training_parameters.evalai_inference = True
+    registry.register("config", config)
+    
+    vqa_config = config.task_attributes.vqa.dataset_attributes.textvqa
+    
+    self.config = config
+    ocr_token_processor_config = vqa_config.processors.ocr_token_processor
+    self.ocr_token_processor = EndToEndOCR()
     
   def _build_pythia_model(self):
     state_dict = torch.load('demo_model_data/lorra.pth')
@@ -185,17 +196,14 @@ class LoRRADemo:
 
   def dump_fasttext_vectors(self, url):
     ocr_tokens = self._get_ocr_tokens(url)
-    ocr_tokens = [
-        self.ocr_token_processor({"text": token})["text"]
-        for token in ocr_tokens
-    ]
+    ocr_tokens = [self.ocr_token_processor({"text": token})["text"] for token in ocr_tokens]
 
-    print("OCR tokens returned by cloud vision:", ocr_tokens)
+    print("OCR tokens returned by the ocr module", ocr_tokens)
 
-    with open("/tokens.txt", "w") as f:
+    with open("tokens.txt", "w") as f:
       f.write("\n".join(ocr_tokens))
       
-    cmd = "/fastText/fasttext print-word-vectors pythia/pythia/.vector_cache/wiki.en.bin < tokens.txt"
+    cmd = "fastText/fasttext print-word-vectors pythia/pythia/.vector_cache/wiki.en.bin < tokens.txt"
     
     output = subprocess.check_output(cmd, shell=True)
     
@@ -235,11 +243,11 @@ class LoRRADemo:
     return ret
   
   def _build_detection_model(self):
-    cfg.merge_from_file('model_data/detectron_model.yaml')
+    cfg.merge_from_file('demo_model_data/detectron_model.yaml')
     cfg.freeze()
 
     model = build_detection_model(cfg)
-    checkpoint = torch.load('model_data/detectron_model.pth', 
+    checkpoint = torch.load('demo_model_data/detectron_model.pth', 
                             map_location=torch.device("cpu"))
 
     load_state_dict(model, checkpoint.pop("model"))
@@ -354,12 +362,13 @@ class LoRRADemo:
 def execute(image_url, question):
   clear_output()
   demo = LoRRADemo()
- 
   image_path = demo.get_actual_image(image_url)
   image = Image.open(image_path)
   demo.init_ocr_processor()
   demo.dump_fasttext_vectors(image_url)
+  print("--------------------Building--------------------")
   demo.build()
+  print("--------------------Predicting--------------------")
   scores, predictions = demo.predict(image_url, question)
   
   scores = [score * 100 for score in scores]
