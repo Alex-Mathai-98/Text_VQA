@@ -50,9 +50,9 @@ class LoRRADemo:
   
   def build(self):
     self._init_processors()
-    self.pythia_model = self._build_pythia_model().cuda()
-    self.detection_model = self._build_detection_model().cuda()
-    self.resnet_model = self._build_resnet_model().cuda()
+    self.pythia_model = self._build_pythia_model()
+    self.detection_model = self._build_detection_model()
+    self.resnet_model = self._build_resnet_model()
        
   def _init_processors(self):
     config = self.config
@@ -199,12 +199,10 @@ class LoRRADemo:
     ocr_tokens = [self.ocr_token_processor({"text": token})["text"] for token in ocr_tokens]
 
     print("OCR tokens returned by the ocr module", ocr_tokens)
-
     with open("tokens.txt", "w") as f:
       f.write("\n".join(ocr_tokens))
       
-    cmd = "fastText/fasttext print-word-vectors pythia/pythia/.vector_cache/wiki.en.bin < tokens.txt"
-    
+    cmd = "fastText/fasttext print-word-vectors pythia/pythia/.vector_cache/wiki.en.bin < tokens.txt"  
     output = subprocess.check_output(cmd, shell=True)
     
     with open("vectors.txt", "w") as f:
