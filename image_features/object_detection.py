@@ -28,6 +28,7 @@ class NaiveObjectDetector(nn.Module):
             image = self.get_image_from_path(image)
             trans = transforms.Compose([transforms.ToTensor()])
             image = trans(image)
+            if torch.cuda.is_available(): image = image.cuda()
         pred = self.model([image])
         pred_class = [self.classes[i] for i in list(pred[0]['labels'].detach().cpu().numpy())]
         pred_boxes = [[(i[0], i[1]), (i[2], i[3])] for i in list(pred[0]['boxes'].detach().cpu().numpy())] 
@@ -43,7 +44,7 @@ class NaiveObjectDetector(nn.Module):
         if self.type == 'maskrcnn':
             pred_masks = pred[0]['masks'].numpy()
             pred_masks = pred_masks[:pred_t+1]
-        return pred_boxes, pred_class, pred_masks
+        return pred_boxes, pred_class, pred_masks, image
 
     # Display a plt figure of the bounding boxes highlighted with their associated class labels
     def display_objects(self, image_path, boxes, class_label, masks, show_label = False, rect_th = 2, text_size = 2, text_th = 2, save_path = None):
@@ -87,3 +88,5 @@ if __name__ == '__main__':
     # threshold (0.4) is the confidence value above which to consider a box relevant ; boxes and class_label are as expected
     boxes, class_label, masks = object_detector(inference_example, 0.25)
     object_detector.display_objects(inference_example, boxes, class_label, masks)
+
+
