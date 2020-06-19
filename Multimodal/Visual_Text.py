@@ -2,31 +2,80 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-class CombineVisualText():
+class GridFeaturesAndText(nn.Module):
 	""" Combine Visual and Text Features """
 
-	def __init__(self,embed_dim:int,img_ft_dims:float,batch_size:int):
+	def __init__(self,embed_dim:int,img_ft_dims:list) -> None:
 		"""
 		Arguments :
-			embed_dim : The embedding dimensionality for words
-						ex. 300 for GloVe
+			embed_dim : The dimensionality for the question embedding
+						ex. 768 for BERT
 			img_ft_dims : The size of the image features from the feature extractor
 		"""
+		super(GridFeaturesAndText,self).__init__()
+
 		self.embed_dim = embed_dim
 		self.img_ft_c = img_ft_dims[0]
 		self.img_ft_x = img_ft_dims[1]
 		self.img_ft_y = img_ft_dims[2]
-		self.batch_size = batch_size
 
-	def combine(self,text_fts:torch.tensor,img_fts:torch.tensor) -> torch.tensor:
-		return None
+		self.net1 = nn.Linear(embed_dim,self.img_ft_c)
+
+		self.cosine_sim = torch.nn.CosineSimilarity(dim=1)
 
 
-class AskAttendAnswer(CombineVisualText):
+	def forward(self,text_fts:torch.tensor,img_fts:torch.tensor) -> torch.tensor:
+		
+		# text_fts : (batch_size,embed_dim)
+		batch_size = text_fts.size()[0]
+		max_len = text_fts.size()[1]
+
+		# out1 : (batch_size,img_ft_c)
+		out1 = self.net1(text_fts)
+
+		# out1 : (batch_size,img_ft_c,1,1)
+		out1 = out1.unsqueeze(2).unsqueeze(3)
+		#print(out1.size())
+
+		# similarities : (batch_size,img_ft_c,img_ft_x,img_ft_y)
+		similarities = out1*img_fts
+		#print(similarities.size())
+
+		# similarities : (batch_size,img_ft_x,img_ft_y)
+		similarities = torch.sum(similarities,dim=1)
+		#print(similarities.size())
+
+		# similarities : (batch_size,img_ft_x*img_ft_y)
+		similarities = similarities.view(batch_size,-1)
+		#print(similarities.size())
+
+		# wights : (batch_size,img_ft_x*img_ft_y)
+		weights = F.softmax(similarities,dim=1)
+		#print(weights.size())
+
+		# img_fts : (batch_size,img_ft_c,img_ft_x,img_ft_y)
+		# final_ans : (batch_size,img_ft_c,1)
+		final_ans = torch.bmm(img_fts.view(batch_size,self.img_ft_c,self.img_ft_x*self.img_ft_y),weights.unsqueeze(2))
+		#print(final_ans.size())
+
+		# final_ans : (batch_size,img_ft_c)
+		final_ans = final_ans.squeeze(2)
+		#print(final_ans.size())
+
+		return final_ans
+
+
+class AskAttendAnswer(nn.Module):
 	""" Ask Attend Answer Attention Mechanism """
 
 	def __init__(self,embed_dim:int,img_ft_dims:tuple,batch_size:int,max_seq_len:int,num_outs:int):
-		super(AskAttendAnswer,self).__init__(embed_dim,img_ft_dims,batch_size)
+		
+		super(AskAttendAnswer).__init__()
+
+		self.embed_dim = embed_dim
+		self.img_ft_c = img_ft_dims[0]
+		self.img_ft_x = img_ft_dims[1]
+		self.img_ft_y = img_ft_dims[2]
 
 		self.max_seq_len = max_seq_len
 		self.num_outs = num_outs
