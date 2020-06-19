@@ -3,15 +3,41 @@ import os, random, argparse, cv2, numpy as np
 from optical_character_recognition.text_detection import TextDetection
 from optical_character_recognition.text_recognition import TextRecognition
 
+class GloveEmbeddings(object):
+    def __init__(self, glove_file = 'Data/glove.6B.50d.txt'):
+        with open(glove_file, 'r') as f:
+            self.words = set()
+            self.word_to_vec_map = {}            
+            for line in f:
+                line = line.strip().split()
+                curr_word = line[0]
+                self.words.add(curr_word)
+                self.word_to_vec_map[curr_word] = np.array(line[1:], dtype=np.float64)
+
+    def get_embedding(self, word):
+        word = str(word).lower()
+        try:
+            embedding = self.word_to_vec_map[word]
+        except KeyError:
+            embedding = self.word_to_vec_map['unk']
+        return embedding
+
 class EndToEndOCR(nn.Module):
     def __init__(self):
         super().__init__()
         self.text_detector = TextDetection()
         self.text_recognizer = TextRecognition()
+        self.embedder = GloveEmbeddings() #Use glove_file = FILEPATH to be be able to use that 
+                                            # file for embeddings (6B.50d default)
         if torch.cuda.is_available():
             self.text_detector.cuda(), self.text_recognizer.cuda()
     
     def forward(self, image_path):
+        """
+        Takes an input image_path and gives out a list of all 
+        tokens in that image along with a list of all the embeddings 
+        of these tokens
+        """
         ocr_tokens = list()
         image = cv2.imread(image_path)
         boxes, _, _ = self.text_detector(image_path)
@@ -22,9 +48,17 @@ class EndToEndOCR(nn.Module):
             tmp = image[y_min:y_max, x_min:x_max]
             _, sim_pred = self.text_recognizer(tmp)
             ocr_tokens.append(sim_pred)
-        return ocr_tokens
+        embeddings = []
+        for token in ocr_tokens:
+            embeddings.append(self.embedder.get_embedding(token))
+        return ocr_tokens, embeddings
     
     def visualize_predictions(self, image_path):
+        """
+        Visualize predictions as the CTC reconstruction 
+        instead of just outputting the token ; and also display 
+        text region crops one by one
+        """
         image = cv2.imread(image_path)
         boxes, _, _ = self.text_detector(image_path)
         boxes = boxes.astype(np.int32)
@@ -55,5 +89,5 @@ if __name__ == '__main__':
 
     # Instantiate OCR model, get tokens in the image (acc. to the model), visualize what the model saw as what
     ocr = EndToEndOCR()
-    tokens_in_image = ocr(image_path)
+    tokens_in_image, embeddings = ocr(image_path)
     ocr.visualize_predictions(image_path)
