@@ -7,19 +7,25 @@ class GloveEmbeddings(object):
     def __init__(self, glove_file = 'Data/glove.6B.50d.txt'):
         with open(glove_file, 'r') as f:
             self.words = set()
-            self.word_to_vec_map = {}            
+            self.word_to_vec_map = {} 
+            n = 0           
+            unk_token = 0
             for line in f:
+                n += 1 
                 line = line.strip().split()
                 curr_word = line[0]
                 self.words.add(curr_word)
                 self.word_to_vec_map[curr_word] = np.array(line[1:], dtype=np.float64)
+                unk_token += np.array(line[1:], dtype=np.float64)
+            self.unk_token = unk_token / n
+        assert self.unk_token.shape == np.array(line[1:]).shape
 
     def get_embedding(self, word):
         word = str(word).lower()
         try:
             embedding = self.word_to_vec_map[word]
         except KeyError:
-            embedding = self.word_to_vec_map['unk']
+            embedding = self.unk_token
         return embedding
 
 class EndToEndOCR(nn.Module):
