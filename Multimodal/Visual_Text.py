@@ -72,7 +72,7 @@ class AskAttendAnswer(nn.Module):
 		self.img_ft_c = img_ft_dims[0]
 		self.img_ft_x = img_ft_dims[1]
 		self.img_ft_y = img_ft_dims[2]
-
+	
 		self.max_seq_len = max_seq_len
 		self.num_outs = num_outs
 

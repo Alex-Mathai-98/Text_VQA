@@ -1,1 +1,1 @@
-from .Visual_Text import CombineVisualText,AskAttendAnswer
+from .Visual_Text import GridFeaturesAndText,AskAttendAnswer
