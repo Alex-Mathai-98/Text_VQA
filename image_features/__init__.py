@@ -1,1 +1,2 @@
 from .grid_features import GridFeatures
+from .feature_extractor import EndToEndFeatExtractor

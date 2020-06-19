@@ -1,1 +1,1 @@
-from .text_features import TextModel
+from .text_features import BertTextModel
