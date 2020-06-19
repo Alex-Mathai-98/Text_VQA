@@ -21,14 +21,10 @@ class GridFeaturesAndText(nn.Module):
 
 		self.net1 = nn.Linear(embed_dim,self.img_ft_c)
 
-		self.cosine_sim = torch.nn.CosineSimilarity(dim=1)
-
-
 	def forward(self,text_fts:torch.tensor,img_fts:torch.tensor) -> torch.tensor:
 		
 		# text_fts : (batch_size,embed_dim)
 		batch_size = text_fts.size()[0]
-		max_len = text_fts.size()[1]
 
 		# out1 : (batch_size,img_ft_c)
 		out1 = self.net1(text_fts)
