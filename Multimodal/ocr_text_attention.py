@@ -1,15 +1,6 @@
 import torch, torch.nn as nn, torch.nn.functional as f
 import random, numpy as np
 
-seed = 1002
-random.seed(seed)
-np.random.seed(seed)
-torch.manual_seed(seed)
-torch.random.manual_seed(seed)
-torch.cuda.manual_seed(seed)
-torch.backends.cudnn.enabled = False
-torch.backends.cudnn.deterministic=True
-
 class VectorizedOCRTokensAndText(nn.Module):
     def __init__(self, question_dim: int = 768, ocr_token_dim: int = 50):
         super().__init__()
