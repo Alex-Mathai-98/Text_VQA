@@ -250,8 +250,8 @@ if __name__ == '__main__' :
 	#text_fts:torch.tensor,img_fts:torch.tensor,obj_fts:torch.tensor,ocr_fts:torch.tensor,ocr_tokens:torch.tensor
 	vectorized_final_ans = alex.forward(text_inp,img_inp,obj_inp,ocr_inp,new_ocr_inp,num_tokens)
 
-	print(loop_final_ans[0])
-	print(vectorized_final_ans[0])
+	print(loop_final_ans[0,-5:])
+	print(vectorized_final_ans[0,-5:])
 
 	if torch.all(torch.eq(vectorized_final_ans,loop_final_ans)) :
 		print("Success")
