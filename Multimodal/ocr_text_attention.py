@@ -15,40 +15,32 @@ class VectorizedOCRTokensAndText(nn.Module):
         super().__init__()
         self.linear1 = nn.Linear(question_dim, ocr_token_dim)
 
-    def loop_forward(self, question_feat: torch.tensor, ocr_token_feats: torch.tensor, num_tokens: list) -> torch.tensor:
+    def loop_forward(self, question_feat: torch.tensor, ocr_token_feats: torch.tensor) -> torch.tensor:
         """
         question_feat:    question feature of size - question_dim
         ocr_token_feats:  tensor of all ocr token embeddings of size - (k, ocr_token_dim)
         """
-        # Get the batch_size 
-        batch_size, question_dim = question_feat.shape
-        loop_forwards = []
+ 
+        # Question feature needs to match ocr token embedding size
+        # Change size with linear layer
+        adjusted_question_feat = self.linear1(question_feat)
 
-        for i in range(batch_size):
+        # Element wise multiply every ocr token with new question feature
+        # hadamard.shape = (k, ocr_token_dim)
+        hadamard = adjusted_question_feat.unsqueeze(0) * ocr_token_feats
 
-            # Question feature needs to match ocr token embedding size
-            # Change size with linear layer
-            adjusted_question_feat = self.linear1(question_feat[i])
+        # Calculate the attention weights ; 
+        # pre_weights.shape = (k) 
+        pre_weights = torch.sum(hadamard, dim = 1, dtype = float)
 
-            # Element wise multiply every ocr token with new question feature
-            # hadamard.shape = (k, ocr_token_dim)
-            hadamard = adjusted_question_feat.unsqueeze(0) * ocr_token_feats[i]
+        # Apply softmax
+        weights = f.softmax(pre_weights, dim = 0)
 
-            # Calculate the attention weights ; 
-            # pre_weights.shape = (k) 
-            pre_weights = torch.sum(hadamard, dim = 1, dtype = float)
-
-            # Apply softmax
-            weights = f.softmax(pre_weights, dim = 0)
-
-            # Apply this attention over the ocr tokens
-            # attended_feature.shape = (1, ocr_token_dim)
-            attended_feature = torch.mm(weights.unsqueeze(0), ocr_token_feats[i].type(torch.float64))
-            
-            # Final output returns shape (ocr_token_dim)
-            loop_forwards.append(attended_feature.squeeze())
-
-        return torch.stack(loop_forwards)
+        # Apply this attention over the ocr tokens
+        # attended_feature.shape = (1, ocr_token_dim)
+        attended_feature = torch.mm(weights.unsqueeze(0), ocr_token_feats.type(torch.float64))
+        
+        return attended_feature.squeeze()
 
     def forward(self, question_feat: torch.tensor, ocr_token_feats: torch.tensor, num_tokens: list) -> torch.tensor:
         """
@@ -87,11 +79,28 @@ class VectorizedOCRTokensAndText(nn.Module):
 
 
 if __name__ == '__main__':
-    question = torch.rand(4, 768)
-    ocr_features = torch.rand(4, 5, 50)
-    num_tokens = torch.tensor([5, 5, 5, 5])
-    ocr_text_att = VectorizedOCRTokensAndText()
-    vectorized_out = ocr_text_att(question, ocr_features, num_tokens)
-    loop_out = ocr_text_att.loop_forward(question, ocr_features, num_tokens)
-    print(vectorized_out)
-    print(loop_out[-1])
+
+    # Alex test for obj ------------------------------------
+    MAX_OBJECTS = 5
+    batch_size = 3
+    IMG_DIM = 2048
+    QUEST_DIM = 768
+
+    text_inp = torch.randn((3,QUEST_DIM))
+    img_inp = [ torch.randn((2,IMG_DIM)), torch.randn((4,IMG_DIM)), torch.randn((3,IMG_DIM))] 
+    num_objects = torch.tensor([2,4,3])
+
+    new_img_inp = torch.zeros( (batch_size,MAX_OBJECTS,IMG_DIM) )
+    new_img_inp[0,:2,:] = img_inp[0]
+    new_img_inp[1,:4,:] = img_inp[1]
+    new_img_inp[2,:3,:] = img_inp[2]
+
+    ocr_text_att = VectorizedOCRTokensAndText(question_dim= QUEST_DIM, ocr_token_dim= IMG_DIM)
+    vectorized_out = ocr_text_att(text_inp, new_img_inp, num_objects)
+
+    loop_out = []
+    for n, i in enumerate(img_inp):
+        loop_out.append(ocr_text_att.loop_forward(text_inp[n], i))
+    loop_out = torch.stack(loop_out)
+
+    breakpoint()
