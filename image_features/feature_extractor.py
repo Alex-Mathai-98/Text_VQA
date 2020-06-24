@@ -38,14 +38,14 @@ class EndToEndFeatExtractor(nn.Module):
         self.object_detector = NaiveObjectDetector(type = object)
         self.feature_extractor = NaiveObjectFeatureExtractor(model = feature)
     
-    def forward(self, image, object_threshold = 0.4):
+    def forward(self, image_path, object_threshold = 0.4):
         """
         image argument is image path and never an image itself, 
         the object detector reads the image  
         """
-        try: boxes, _, _, image = self.object_detector(inference_example, object_threshold)
+        try: boxes, _, _, image = self.object_detector(image_path, object_threshold)
         except: 
-            boxes, _, _, image = self.object_detector(inference_example, 0.075)
+            boxes, _, _, image = self.object_detector(image_path, 0.075)
             print("Very few prominent objects in the image")
 
         object_features = []
