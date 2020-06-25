@@ -1,8 +1,9 @@
-import sys, os ,cv2, random, matplotlib.pyplot as plt, numpy as np, pickle
+import sys, os , random, matplotlib.pyplot as plt, numpy as np, pickle
 import torchvision, torchvision.transforms as transforms, torch.nn as nn, torch
 from tqdm import tqdm
 from PIL import Image
 from utils.customDatasets import CustomDataset
+from typing import List
 
 class NaiveObjectDetector(nn.Module):
     def __init__(self, type = 'fasterrcnn', labels_path = 'image_features/labels.txt', num_classes = 91):
@@ -21,30 +22,54 @@ class NaiveObjectDetector(nn.Module):
     
     def get_image_from_path(self, path):
         img = Image.open(path)
-        return np.asarray(img)
+        X = img
+        if X.mode != 'RGB' :
+            X = X.convert('RGB')
+        return np.asarray(X)
     
-    def forward(self, image, threshold):
-        if type(image) == str:
-            image = self.get_image_from_path(image)
-            trans = transforms.Compose([transforms.ToTensor()])
-            image = trans(image)
-            if torch.cuda.is_available(): image = image.cuda()
-        pred = self.model([image])
-        pred_class = [self.classes[i] for i in list(pred[0]['labels'].detach().cpu().numpy())]
-        pred_boxes = [[(i[0], i[1]), (i[2], i[3])] for i in list(pred[0]['boxes'].detach().cpu().numpy())] 
-        pred_score = list(pred[0]['scores'].detach().cpu().numpy())
-        # Make sure that the threshold is not more than all the object scores, since then no objects would show up at all
-        while(True):
-            try:
-                pred_t = [pred_score.index(x) for x in pred_score if x > threshold][-1] 
-                break
-            except IndexError:
-                threshold -= 0.05
-        pred_boxes, pred_class, pred_masks = pred_boxes[:pred_t+1], pred_class[:pred_t+1], None
-        if self.type == 'maskrcnn':
-            pred_masks = pred[0]['masks'].numpy()
-            pred_masks = pred_masks[:pred_t+1]
-        return pred_boxes, pred_class, pred_masks, image
+    def forward(self, image_list:List[str], threshold:float):
+
+        pred_boxes_list = []
+        pred_class_list = []
+        pred_masks_list = []
+        images = []
+
+        for image in image_list : 
+
+            print("Image : {}".format(image))
+            if type(image) == str:
+                image = self.get_image_from_path(image)
+                trans = transforms.Compose([transforms.ToTensor()])
+                image = trans(image)
+                if torch.cuda.is_available(): image = image.cuda()
+            print("\tImage Size : {}".format(image.size()))
+
+            pred = self.model([image])
+            pred_class = [self.classes[i] for i in list(pred[0]['labels'].detach().cpu().numpy())]
+            pred_boxes = [[(i[0], i[1]), (i[2], i[3])] for i in list(pred[0]['boxes'].detach().cpu().numpy())] 
+            pred_score = list(pred[0]['scores'].detach().cpu().numpy())
+
+            print("\tNum Boxes : {}".format(len(pred_boxes)))
+            print("\tMax Score : {}, Min Score : {}".format(np.max(pred_score),np.min(pred_score)))
+
+            # Make sure that the threshold is not more than all the object scores, since then no objects would show up at all
+            while(True):
+                try:
+                    pred_t = [pred_score.index(x) for x in pred_score if x > threshold][-1] 
+                    break
+                except IndexError:
+                    threshold -= 0.05
+            pred_boxes, pred_class, pred_masks = pred_boxes[:pred_t+1], pred_class[:pred_t+1], None
+            if self.type == 'maskrcnn':
+                pred_masks = pred[0]['masks'].numpy()
+                pred_masks = pred_masks[:pred_t+1]
+
+            pred_boxes_list.append(pred_boxes)
+            pred_class_list.append(pred_class)
+            pred_masks_list.append(pred_masks)
+            images.append(image)
+
+        return pred_boxes_list, pred_class_list, pred_masks_list, images
 
     # Display a plt figure of the bounding boxes highlighted with their associated class labels
     def display_objects(self, image_path, boxes, class_label, masks, show_label = False, rect_th = 2, text_size = 2, text_th = 2, save_path = None):
