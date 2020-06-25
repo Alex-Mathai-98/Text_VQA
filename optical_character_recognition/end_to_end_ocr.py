@@ -57,7 +57,7 @@ class EndToEndOCR(nn.Module):
         embeddings = []
         for token in ocr_tokens:
             embeddings.append(self.embedder.get_embedding(token))
-        return ocr_tokens, embeddings
+        return ocr_tokens, embeddings,len(ocr_tokens)
     
     def visualize_predictions(self, image_path):
         """
@@ -95,5 +95,5 @@ if __name__ == '__main__':
 
     # Instantiate OCR model, get tokens in the image (acc. to the model), visualize what the model saw as what
     ocr = EndToEndOCR()
-    tokens_in_image, embeddings = ocr(image_path)
+    tokens_in_image, embeddings,num_tokens = ocr(image_path)
     ocr.visualize_predictions(image_path)
