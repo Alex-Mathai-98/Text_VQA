@@ -41,7 +41,7 @@ class NaiveObjectDetector(nn.Module):
                 image = self.get_image_from_path(image)
                 trans = transforms.Compose([transforms.ToTensor()])
                 image = trans(image)
-                if torch.cuda.is_available(): image = image.cuda()
+                #if torch.cuda.is_available(): image = image.cuda()
             print("\tImage Size : {}".format(image.size()))
 
             pred = self.model([image])
@@ -49,9 +49,7 @@ class NaiveObjectDetector(nn.Module):
             pred_boxes = [[(i[0], i[1]), (i[2], i[3])] for i in list(pred[0]['boxes'].detach().cpu().numpy())] 
             pred_score = list(pred[0]['scores'].detach().cpu().numpy())
 
-            print("\tNum Boxes : {}".format(len(pred_boxes)))
-            print("\tMax Score : {}, Min Score : {}".format(np.max(pred_score),np.min(pred_score)))
-
+            
             # Make sure that the threshold is not more than all the object scores, since then no objects would show up at all
             while(True):
                 try:
@@ -63,6 +61,9 @@ class NaiveObjectDetector(nn.Module):
             if self.type == 'maskrcnn':
                 pred_masks = pred[0]['masks'].numpy()
                 pred_masks = pred_masks[:pred_t+1]
+
+            print("\tNum Boxes : {}".format(len(pred_boxes)))
+            print("\tMax Score : {}, Min Score : {}".format(np.max(pred_score),np.min(pred_score)))
 
             pred_boxes_list.append(pred_boxes)
             pred_class_list.append(pred_class)

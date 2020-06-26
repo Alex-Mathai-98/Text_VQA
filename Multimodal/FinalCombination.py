@@ -8,7 +8,7 @@ class CopyNet(nn.Module) :
 		
 		super(CopyNet,self).__init__()
 		self.COMBINED_DIM = combined_dim
-		self.EMBED_DIM = EMBED_DIM
+		self.EMBED_DIM = embed_dim
 		self.MAX_TOKENS = max_tokens
 
 		# To project the Combined embedding to OCR token embedding size
@@ -70,7 +70,7 @@ class CopyNet(nn.Module) :
 
 class CombineModes(nn.Module):
 
-	def __init__(self,quest_dim:int,ocr_dim:int,img_ft_dims:int,vocab_dim:int,embed_dim:int,max_tokens:int) -> None:
+	def __init__(self,quest_dim:int,ocr_dim:int,img_ft_dims:list,vocab_dim:int,embed_dim:int,max_tokens:int) -> None:
 		"""
 		Arguments :
 			quest_dim : The dimensionality for the question embedding
@@ -91,7 +91,7 @@ class CombineModes(nn.Module):
 		super(CombineModes,self).__init__()
 		self.QUEST_DIM = quest_dim
 		self.OCR_DIM = ocr_dim
-		self.IMG_DIM = img_ft_dims
+		self.IMG_DIM = img_ft_dims[0]
 		self.VOCAB_DIM = vocab_dim
 		self.EMBED_DIM = embed_dim
 		self.MAX_TOKENS = max_tokens
@@ -156,7 +156,7 @@ class CombineModes(nn.Module):
 		assert(copy_space.size()[0]==(self.MAX_TOKENS))
 
 		# Final prediction
-		prediction = F.softmax(torch.cat((answer_space,copy_space),dim=0)) # (VOCAB_DIM + MAX_TOKENS)
+		prediction = F.softmax(torch.cat((answer_space,copy_space),dim=0),dim=1) # (VOCAB_DIM + MAX_TOKENS)
 		assert(prediction.size()[0]==(self.VOCAB_DIM+self.MAX_TOKENS))
 
 		return prediction
@@ -207,7 +207,7 @@ class CombineModes(nn.Module):
 		assert(copy_space.size()==(BATCH_SIZE,self.MAX_TOKENS))
 
 		# Final prediction
-		prediction = F.softmax(torch.cat((answer_space,copy_space),dim=1)) #(M,VOCAB_DIM + MAX_TOKENS)
+		prediction = F.softmax(torch.cat((answer_space,copy_space),dim=1),dim=1) #(M,VOCAB_DIM + MAX_TOKENS)
 		assert(prediction.size()==(BATCH_SIZE,self.VOCAB_DIM+self.MAX_TOKENS))
 
 		return prediction
@@ -252,6 +252,14 @@ if __name__ == '__main__' :
 
 	print(loop_final_ans[0,-5:])
 	print(vectorized_final_ans[0,-5:])
+	print()
+	print()
+	print(loop_final_ans[1,-5:])
+	print(vectorized_final_ans[1,-5:])
+	print()
+	print()
+	print(loop_final_ans[2,-5:])
+	print(vectorized_final_ans[2,-5:])
 
 	if torch.all(torch.eq(vectorized_final_ans,loop_final_ans)) :
 		print("Success")

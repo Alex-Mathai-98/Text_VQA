@@ -5,25 +5,25 @@ import torch.nn.functional as F
 class GridFeaturesAndText(nn.Module):
 	""" Combine Visual and Text Features """
 
-	def __init__(self,embed_dim:int,img_ft_dims:list) -> None:
+	def __init__(self,quest_dim:int,img_ft_dims:list) -> None:
 		"""
 		Arguments :
-			embed_dim : The dimensionality for the question embedding
+			quest_dim : The dimensionality for the question embedding
 						ex. 768 for BERT
 			img_ft_dims : The size of the image features from the feature extractor
 		"""
 		super(GridFeaturesAndText,self).__init__()
 
-		self.embed_dim = embed_dim
+		self.QUEST_DIM = quest_dim
 		self.img_ft_c = img_ft_dims[0]
 		self.img_ft_x = img_ft_dims[1]
 		self.img_ft_y = img_ft_dims[2]
 
-		self.net1 = nn.Linear(embed_dim,self.img_ft_c)
+		self.net1 = nn.Linear(self.QUEST_DIM,self.img_ft_c)
 
 	def forward(self,text_fts:torch.tensor,img_fts:torch.tensor) -> torch.tensor:
 		
-		# text_fts : (batch_size,embed_dim)
+		# text_fts : (batch_size,QUEST_DIM)
 		batch_size = text_fts.size()[0]
 
 		# out1 : (batch_size,img_ft_c)

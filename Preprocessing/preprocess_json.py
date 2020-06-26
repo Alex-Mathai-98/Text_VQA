@@ -1,7 +1,7 @@
 import json
 import os
 
-set_ = "train"
+set_ = "test"
 from_data_path = "../Data/" + set_ + "/meta-data.json"
 to_data_path = "../Data/" + set_ + "/cleaned.json"
 

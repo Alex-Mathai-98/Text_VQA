@@ -53,7 +53,7 @@ class VectorizedOCRTokensAndText(nn.Module):
         # Calculate the attention pre softmax weights ;
         # Calculate mask and replace 0 values with -inf 
         # pre_weights.shape = (batch_size, max_tokens) 
-        pre_weights = torch.sum(hadamard, dim = 2, dtype = float)
+        pre_weights = torch.sum(hadamard, dim = 2, dtype = torch.float)
         mask = torch.arange(ocr_token_feats.shape[1])[None, :] < num_tokens[:, None]
         pre_weights[~mask] = float('-inf')
 
@@ -63,7 +63,7 @@ class VectorizedOCRTokensAndText(nn.Module):
 
         # Apply this attention over the ocr tokens
         # attended_feature.shape = (batch_size, 1, ocr_token_dim)
-        attended_feature = torch.bmm(weights.unsqueeze(1), ocr_token_feats.type(torch.float64))
+        attended_feature = torch.bmm(weights.unsqueeze(1), ocr_token_feats)
 
         # Final output returns shape (batch_size, ocr_token_dim)
         return attended_feature.squeeze()

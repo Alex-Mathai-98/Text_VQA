@@ -67,30 +67,30 @@ class ObjectFeaturesAndText(nn.Module):
 
 		# out1 : (m,1,IMG_DIM)
 		out1 = self.net1(text_fts).unsqueeze(1)
-		assert(out1.size() == (BATCH_SIZE,1,self.IMG_DIM))
+		assert(out1.size() == (BATCH_SIZE,1,self.IMG_DIM)), "out1 size : {}".format(out1.size())
 
 		# out1 : (m,MAX_OBJECTS,IMG_DIM)
 		out1 = out1*img_fts
-		assert(out1.size() == (BATCH_SIZE,self.MAX_OBJECTS,self.IMG_DIM))
+		assert(out1.size() == (BATCH_SIZE,self.MAX_OBJECTS,self.IMG_DIM)), "out1 size : {}".format(out1.size())
 
 		# out1 : (m,MAX_OBJECTS)
 		out1 = torch.sum(out1,dim=2)
-		assert(out1.size()==(BATCH_SIZE,self.MAX_OBJECTS))
+		assert(out1.size()==(BATCH_SIZE,self.MAX_OBJECTS)), "out1 size : {}".format(out1.size())
 
 		# hard coding the padded stuff to -inf
 		out1[attention_mask==0] = -1*float("Inf")
 
 		# out1 : (m,MAX_OBJECTS,1)
 		out1 = F.softmax(out1,dim=1).unsqueeze(2)
-		assert(out1.size()==(BATCH_SIZE,self.MAX_OBJECTS,1))
+		assert(out1.size()==(BATCH_SIZE,self.MAX_OBJECTS,1)), "out1 size : {}".format(out1.size())
 
 		# ans : (m,MAX_OBJECTS,IMG_DIM)
 		ans = out1*img_fts
-		assert(ans.size()==(BATCH_SIZE,self.MAX_OBJECTS,self.IMG_DIM))
+		assert(ans.size()==(BATCH_SIZE,self.MAX_OBJECTS,self.IMG_DIM)), "ans size : {}".format(ans.size())
 
 		# ans : (m,IMG_DIM)
 		ans = torch.sum(ans,dim=1)
-		assert(ans.size()==(BATCH_SIZE,self.IMG_DIM))
+		assert(ans.size()==(BATCH_SIZE,self.IMG_DIM)), "ans size : {}".format(ans.size())
 
 		return ans
 

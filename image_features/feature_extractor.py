@@ -29,17 +29,18 @@ class NaiveObjectFeatureExtractor(nn.Module):
         if img.shape[0] == 1:
             img = img.expand(3, -1, -1)
         transform = Variable(img.unsqueeze(0))
-        if torch.cuda.is_available(): transform = transform.cuda()
+        #if torch.cuda.is_available(): transform = transform.cuda()
         extracted_features = self.feature_module(transform).squeeze() 
         return extracted_features.detach()
 
 class EndToEndFeatExtractor(nn.Module):
-    def __init__(self, feature = 'resnet152', object = 'fasterrcnn'):
+    def __init__(self, max_objects:int=50,feature = 'resnet152', object = 'fasterrcnn'):
         super().__init__()
+        self.MAX_OBJECTS = max_objects
         self.object_detector = NaiveObjectDetector(type = object)
         self.feature_extractor = NaiveObjectFeatureExtractor(model = feature)
     
-    def forward(self, image_paths:List[str], max_objects:int,object_threshold = 0.4):
+    def forward(self, image_paths:List[str],object_threshold = 0.4):
         """
         image argument is image path and never an image itself, 
         the object detector reads the image  
@@ -58,8 +59,9 @@ class EndToEndFeatExtractor(nn.Module):
         print("Num Boxes : {}".format(len(boxes_list)))
 
         num_boxes = []
-        object_features = []
+        all_object_features = []
         for boxes,classes,masks,image in zip(boxes_list, class_list, masks_list, image_list):
+            object_features = []
             print("Boxes retrieved")
             for k, box in enumerate(boxes):
                 start_point, end_point = box[0], box[1]
@@ -68,17 +70,21 @@ class EndToEndFeatExtractor(nn.Module):
                 print("\tbox {} processed".format(k + 1))
             print("All boxes processed")
 
-            num_boxes.append( min(len(boxes),max_objects) )
+            num_boxes.append( min(len(boxes),self.MAX_OBJECTS) )
             print("Old Length : {}".format(len(object_features)))
-            if len(boxes) > max_objects:
-                object_features = object_features[:-(len(boxes)-max_objects)]
+            if len(boxes) > self.MAX_OBJECTS:
+                object_features = object_features[:-(len(boxes)-self.MAX_OBJECTS)]
             else :
-                for k in range(max_objects-len(boxes)):
+                for k in range(self.MAX_OBJECTS-len(boxes)):
                     object_features.append(torch.zeros((2048)))
-                    object_features[-1] = object_features[-1].cuda()
+                    #object_features[-1] = object_features[-1].cuda()
             print("New Length : {}\n".format(len(object_features)))
 
-        out_tensor = torch.stack(object_features)
+            object_features = torch.stack(object_features)
+            #object_features = object_features.unsqueeze(0)
+            all_object_features.append(object_features)
+
+        out_tensor = torch.stack(all_object_features)
         num_boxes = torch.tensor(num_boxes)
         return out_tensor,num_boxes
 
@@ -90,7 +96,7 @@ if __name__ == '__main__':
     mode = "train"
     ID_path = os.path.join(data_path, "{}/{}_ids.txt".format(mode,mode))
     json_path = os.path.join(data_path, "{}/cleaned.json".format(mode))
-    tokens_path = os.path.join(data_path,"{}/{}_tokens_in_images.txt".format(mode,mode))
+    tokens_path = os.path.join(data_path,"tokens_in_images.txt")
     dataloader = CustomDataset(data_path, ID_path, json_path, tokens_path, (448, 448), set_=mode)
 
 
@@ -104,9 +110,10 @@ if __name__ == '__main__':
     
     print("\n--------------------------------------------To seperate the code output from the warnings --------------------------------------------\n")
     
-    end_to_end_feature_extractor = EndToEndFeatExtractor()
-    if torch.cuda.is_available(): end_to_end_feature_extractor = end_to_end_feature_extractor.cuda()
     max_objects = 20
+    end_to_end_feature_extractor = EndToEndFeatExtractor(max_objects)
+    if torch.cuda.is_available(): end_to_end_feature_extractor = end_to_end_feature_extractor.cuda()
+    
     out_tensor,num_boxes = end_to_end_feature_extractor([inference_example1,inference_example2,inference_example3,inference_example4,inference_example5],max_objects)
     print("Output tensor shape is {}".format(out_tensor.shape))
     print("Num Objects : {}".format(num_boxes))
