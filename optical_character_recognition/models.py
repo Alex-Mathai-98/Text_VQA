@@ -106,10 +106,6 @@ class RefineNet(nn.Module):
 
         out = aspp1 + aspp2 + aspp3 + aspp4
         return out.permute(0, 2, 3, 1)  
-if __name__ == '__main__':
-    model = CRAFT(pretrained=True).cuda()
-    output, _ = model(torch.randn(1, 3, 768, 768).cuda())
-    print(output.shape)
 
 class BidirectionalLSTM(nn.Module):
 
