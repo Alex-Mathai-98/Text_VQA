@@ -46,39 +46,39 @@ class EndToEndFeatExtractor(nn.Module):
         the object detector reads the image  
         """
 
-        print("Image Paths : {}".format(image_paths))
+        #print("Image Paths : {}".format(image_paths))
 
         try: 
             boxes_list, class_list, masks_list, image_list = self.object_detector(image_paths, object_threshold)
-            print("Success")
+            #print("Success")
         except: 
-            print("Exception")
+            #print("Exception")
             boxes_list, class_list, masks_list, image_list = self.object_detector(image_paths, 0.075)
-            print("Very few prominent objects in the image")
+            #print("Very few prominent objects in the image")
 
-        print("Num Boxes : {}".format(len(boxes_list)))
+        #print("Num Boxes : {}".format(len(boxes_list)))
 
         num_boxes = []
         all_object_features = []
         for boxes,classes,masks,image in zip(boxes_list, class_list, masks_list, image_list):
             object_features = []
-            print("Boxes retrieved")
+            #print("Boxes retrieved")
             for k, box in enumerate(boxes):
                 start_point, end_point = box[0], box[1]
                 object_box = image[:, int(start_point[1]):int(end_point[1]), int(start_point[0]):int(end_point[0])]
                 object_features.append(self.feature_extractor(object_box))
-                print("\tbox {} processed".format(k + 1))
-            print("All boxes processed")
+                #print("\tbox {} processed".format(k + 1))
+            #print("All boxes processed")
 
             num_boxes.append( min(len(boxes),self.MAX_OBJECTS) )
-            print("Old Length : {}".format(len(object_features)))
+            #print("Old Length : {}".format(len(object_features)))
             if len(boxes) > self.MAX_OBJECTS:
                 object_features = object_features[:-(len(boxes)-self.MAX_OBJECTS)]
             else :
                 for k in range(self.MAX_OBJECTS-len(boxes)):
                     object_features.append(torch.zeros((2048)))
                     #object_features[-1] = object_features[-1].cuda()
-            print("New Length : {}\n".format(len(object_features)))
+            #print("New Length : {}\n".format(len(object_features)))
 
             object_features = torch.stack(object_features)
             #object_features = object_features.unsqueeze(0)
