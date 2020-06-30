@@ -36,13 +36,13 @@ class NaiveObjectDetector(nn.Module):
 
         for image in image_list : 
 
-            print("Image : {}".format(image))
+            #print("Image : {}".format(image))
             if type(image) == str:
                 image = self.get_image_from_path(image)
                 trans = transforms.Compose([transforms.ToTensor()])
                 image = trans(image)
                 #if torch.cuda.is_available(): image = image.cuda()
-            print("\tImage Size : {}".format(image.size()))
+            #print("\tImage Size : {}".format(image.size()))
 
             pred = self.model([image])
             pred_class = [self.classes[i] for i in list(pred[0]['labels'].detach().cpu().numpy())]
@@ -62,8 +62,8 @@ class NaiveObjectDetector(nn.Module):
                 pred_masks = pred[0]['masks'].numpy()
                 pred_masks = pred_masks[:pred_t+1]
 
-            print("\tNum Boxes : {}".format(len(pred_boxes)))
-            print("\tMax Score : {}, Min Score : {}".format(np.max(pred_score),np.min(pred_score)))
+            #print("\tNum Boxes : {}".format(len(pred_boxes)))
+            #print("\tMax Score : {}, Min Score : {}".format(np.max(pred_score),np.min(pred_score)))
 
             pred_boxes_list.append(pred_boxes)
             pred_class_list.append(pred_class)

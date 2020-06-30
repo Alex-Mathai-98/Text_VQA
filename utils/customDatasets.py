@@ -4,6 +4,7 @@ from torchvision import transforms
 from PIL import Image
 import json
 import os
+from typing import List
 import numpy as np
 import tqdm
 from transformers import BertTokenizer, BertModel
@@ -11,14 +12,15 @@ import pickle
 
 class CustomDataset(data.Dataset):
 	'Characterizes a dataset for PyTorch'
-	def __init__(self, data_path, ID_path, json_path, tokens_path, target_image_size, set_="train"):
+	def __init__(self, data_path, ID_path, json_path, tokens_path, target_image_size, set_="train",max_tokens=50):
 		'Initialization'
+
+		self.MAX_TOKENS = max_tokens
 		self.data_path = data_path
 		self.cleaned_json = self.read_Json(json_path)
 
 		self.list_IDs = self.read_IDs(ID_path)
 		self.ocr_dict = self.read_OCR_tokens(tokens_path)
-		# self.list_IDs = [i for i in range(len(self.map_IDs))]
 		
 		self.target_image_size = target_image_size
 		self.set_ = set_
@@ -31,11 +33,51 @@ class CustomDataset(data.Dataset):
 				transforms.Normalize(self.channel_mean, self.channel_std)])
 
 		self.answer_dict = self.read_answer_vocab()
+		self.OCR_Answer_Overlap()
+
+	def OCR_Answer_Overlap(self):
+
+		image_ids = list(self.id_to_answer.keys())
+
+		exists_in_OCR = 0
+		total_ids = 0
+
+		answers = []
+
+		for image in image_ids :
+			
+			ans = self.id_to_answer[image].strip().lower()
+			
+			tokens = self.ocr_dict[image]
+			tokens = [tok.strip().lower() for tok in tokens]
+
+			if ans in tokens:
+				exists_in_OCR += 1
+				answers.append(ans)
+
+			total_ids += 1
+
+		# print("Total Previous Size : {}".format(len(self.answer_dict)))
+		# for ans in answers :
+		# 	# if count is 1, then remove it
+		# 	if self.answer_dict[ans][1] == 1:
+		# 		del self.answer_dict[ans]
+		# 	else :
+		# 		self.answer_dict[ans][1] -= 1
+		# print("New Size : {}".format(len(self.answer_dict)))
+
+		print("Percentage Sucessful : {}".format(float(exists_in_OCR)*100/float(total_ids)))
+
+		return
 
 	def read_OCR_tokens(self, file):
 
 		ocr_dict = {}
 		ans = []
+
+		total_input = 0
+		no_ocr = 0
+
 		with open(file,"r") as f:
 			for line in f:
 				line = line.strip()
@@ -46,10 +88,14 @@ class CustomDataset(data.Dataset):
 				assert(num_tokens == len(eles)-3)
 
 				if num_tokens == 0:
-					ocr_dict[id_] = ["NA"]
+					ocr_dict[id_] = [""]
+					no_ocr += 1
 				else :
 					ocr_dict[id_] = eles[2:-1]
+				total_input += 1
 
+		print("Total : {}".format(total_input))
+		print("No OCR : {}".format(no_ocr))
 		return ocr_dict
 
 	def read_IDs(self,file) :
@@ -77,21 +123,70 @@ class CustomDataset(data.Dataset):
 
 	def read_answer_vocab(self):
 
+		id_to_answer = {}
 		answer_dict = {}
 		counter = 0
 
-		with open(os.path.join(os.getcwd(),"Data/answer_space.txt"),"r") as f:
+		with open(os.path.join(os.getcwd(),"Data/new_answer_space.txt"),"r") as f:
 			lines = f.readlines()
 			for line in lines :
 				line = line.strip()
 				line = line.lower()
 
-				if answer_dict.get(line,-1)==-1:
-					answer_dict[line] = counter
+				image_id = line.split(" ")[0]
+				answer = " ".join(line.split(" ")[1:])
+
+				id_to_answer[image_id] = answer
+
+				if answer_dict.get(answer,-1)==-1:
+					answer_dict[answer] = [counter,1]
 					counter += 1
+				else :
+					answer_dict[answer][1] += 1
+
+		answer_dict["unk"] = [counter,1]
+		counter += 1
 
 		print("Answer Vocab Size : {}".format(len(answer_dict)))
+		self.id_to_answer = id_to_answer
 		return answer_dict
+
+
+	def get_answer_idx(self,tokens:List[str],y:str):
+
+		try :
+			assert(type(tokens)==List[str])
+		except :
+			if type(tokens) == str :
+				tokens = tokens.split(" ")
+			else :
+				assert(False)
+
+		print("get_answer_idx ==> tokens 1 : {}".format(tokens))
+		print("get_answer_idx ==> y : {}".format(y))
+
+		y = y.strip().lower()
+		tokens = [tok.strip().lower() for tok in tokens]
+
+		if y in tokens:
+			# answer in OCR tokens - so target idx will be "unk"
+			y_idx = self.answer_dict["unk"][0]
+			# make sure that the answer is in the first "MAX_TOKENS" of the list
+			if len(tokens) > self.MAX_TOKENS :
+				tokens[randint(0,self.MAX_TOKENS)] = y
+		else :
+			# answer not in OCR - so target idx will be part of answer space
+			y_idx = self.answer_dict[y][0]
+
+		# cut the list short
+		tokens = tokens[:self.MAX_TOKENS]
+		tokens = " ".join(tokens)
+		print("get_answer_idx ==> tokens 2 : {}\n".format(tokens))		
+
+		if y_idx == self.answer_dict["unk"][0] :
+			return tokens,y_idx,1
+		else :
+			return tokens,y_idx,0
 
 
 	def __getitem__(self, index):
@@ -106,7 +201,7 @@ class CustomDataset(data.Dataset):
 		if self.ocr_dict.get(ID,None) is not None:
 			tokens = " ".join(self.ocr_dict[ID])
 		else :
-			tokens = "NA"
+			tokens = ""
 
 		# print (ID)
 		# Load image
@@ -134,14 +229,20 @@ class CustomDataset(data.Dataset):
 			# Load Label
 			y = self.cleaned_json["answers"][self.list_IDs[index]][0]
 			y_idx = self.answer_dict[y.strip().lower()]
-			return image_path,transformed_image,q,tokens,y,y_idx
 
-def create_answer_space(file:str,answers:list) :
+			# preprocessing function
+			tokens,y_idx,in_ocr = self.get_answer_idx(tokens,y)
 
-	for index,ans in enumerate(answers) :
+			return image_path,transformed_image,q,tokens,y,y_idx,in_ocr
+
+def create_answer_space(file:str,image_paths:list,answers:list) :
+
+	for path,ans in zip(image_paths,answers) :
 		
-		word = ans + "\n"
+		image_id = path.split("/")[-1].split(".")[0]
+		print("Image Id : {}, Answer : {}".format(image_id,ans))
 
+		word = image_id + " " + ans + "\n"
 		try :
 			with open(file,"a") as f:
 				f.write(word)
@@ -156,36 +257,42 @@ if __name__ == '__main__' :
 	data_path = "/home/alex/Desktop/4-2/Text_VQA/Data/"
 	ID_path = os.path.join(data_path,"{}/{}_ids.txt".format(mode,mode))
 	json_path = os.path.join(data_path,"{}/cleaned.json".format(mode))
-	tokens_path = os.path.join(data_path,"{}/{}_tokens_in_images.txt".format(mode,mode))
+	tokens_path = os.path.join(data_path,"tokens_in_images.txt")
 
 	alex = CustomDataset(data_path,ID_path,json_path,tokens_path,(448,448),mode)
 	total = 0
 	issue = 0
+	#assert(0)
 			
 	alex_loader = data.DataLoader(alex,batch_size=64)
 
-	for x in alex_loader:
+	for idx,x in enumerate(alex_loader):
 		
 		print("Index : {}".format(alex.list_IDs[total]))
 
 		if mode == "train" or mode == "dev" :
-			image_path,transformed_image,q,tokens,y,y_idx = x[0], x[1], x[2], x[3], x[4],x[5]
+			image_paths,transformed_images,qs,tokens,ys,y_idxs,in_ocr = x[0], x[1], x[2], x[3], x[4],x[5],x[6]
 		else :
-			image_path,transformed_image,q,tokens = x[0], x[1], x[2], x[3]
+			image_paths,transformed_images,qs,tokens = x[0], x[1], x[2], x[3]
 
-		#print("Image Path : {}".format(image_path))
-		print("Image : {}".format(transformed_image.size()))
-		#print("Q : {}".format(q))
+		#print("Image Path : {}".format(image_paths))
+		print("Image : {}".format(transformed_images.size()))
+		print("Q : {}".format(qs))
 		#print("Tokens : {}".format(tokens))
 		
 		if mode == "train" or mode == "dev" :
-			print("Y : {}".format(y[:5]))
-			print("Idxs : {}".format(y_idx[:5]))
+			print("In OCR : {}".format(torch.sum(in_ocr)))
+			print("Questions : {}".format(np.array(list(qs))[in_ocr][:5]))
+			print("Y : {}".format(np.array(list(ys))[in_ocr][:5]))
+			print("Idxs : {}".format(y_idxs[:5]))
 
 
-		total += transformed_image.size()[0]
+		total += transformed_images.size()[0]
 
-		# create_answer_space("answer_space.txt",list(y))
+		if idx > 10:
+			break
+
+		#create_answer_space("new_answer_space.txt",image_paths,list(ys))
 
 	# 	tokens = tks.tokenize(q)
 	# 	ids = torch.tensor(tks.convert_tokens_to_ids(tokens)).unsqueeze(0)
