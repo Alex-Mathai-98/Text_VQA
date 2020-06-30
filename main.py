@@ -5,6 +5,7 @@ from utils.customDatasets import CustomDataset
 from typing import List
 from torch.optim import Adam
 from torch.utils import data
+import torch.nn as nn
 import numpy as np
 import torch
 import os
@@ -72,14 +73,14 @@ class GloveEmbeddings(object):
 
 		return all_words,all_embeddings,all_lengths
 
-class Trainer() :
+class Trainer(nn.Module) :
 
 	def __init__(self,config):
 
+		super().__init__()
+
 		self.trainLoader = config["trainLoader"]
-		self.text_feature_extractor = config["text_feature_extractor"]
-		self.grid_feature_extractor = config["grid_feature_extractor"]
-		self.object_feature_extractor = config["object_feature_extractor"]
+		self.devLoader = config["devLoader"]
 		self.VOCAB_SIZE = config["vocab_size"]+1
 		self.MAX_TOKENS = config["max_tokens"]
 		self.QUEST_DIM = config["quest_dim"]
@@ -114,7 +115,13 @@ class Trainer() :
 		self.optim = Adam([ {'params' : self.grid_text_attend.parameters()},
 							{'params' : self.object_text_attend.parameters()},
 							{'params' : self.ocr_text_attend.parameters()},
-							{'params' : self.multi_modal.parameters()} ],lr=5e-4)
+							{'params' : self.multi_modal.parameters()} ],lr=1e-3)
+
+	def save_params(self,epoch):
+
+		diction = { 'epoch' : epoch,
+					'parameters' : self.state_dict()}
+		torch.save(diction,"./params/epoch_{}.pt".format(epoch))
 
 	def get_copy_mask(self,y,ocr_words):
 
@@ -124,8 +131,6 @@ class Trainer() :
 			y = np.array(y)
 			y = np.expand_dims(y,axis=1)
 
-		#print(ocr_words)
-		#print(y)
 		# Create mask by checking where the answer matches the label
 		copy_mask = (ocr_words==y) 
 		copy_mask = torch.tensor(copy_mask).float()
@@ -156,6 +161,7 @@ class Trainer() :
 	def loss_function(self,predictions,y,y_idx,in_ocr,ocr_words):
 
 		in_ocr = in_ocr.byte()
+		print(in_ocr)
 
 		copy_mask = self.get_copy_mask(y,ocr_words)
 		copy_probs = predictions[:,self.VOCAB_SIZE:] * copy_mask
@@ -185,103 +191,109 @@ class Trainer() :
 
 		return loss
 
-	def train(self):
-		
-		idx = 0
-		for dataItem in self.trainLoader :
+	def forward(self,grid_feature_extractor,object_feature_extractor,
+		text_feature_extractor,image_paths,transformed_images,qs,ocr_token_sents):
 
-			idx += 1
+		# extract grid features
+		img_grid_fts = grid_feature_extractor(transformed_images)
+		print("Grid Features extracted, Size : {}".format(img_grid_fts.size()))
+
+		# extract object features
+		img_obj_fts,num_objects = object_feature_extractor(image_paths)
+		print("Object Features extracted, Size : {}".format(img_obj_fts.size()))
+
+		# extract the text features
+		all_steps,txt_fts = text_feature_extractor(qs)
+		print("Text Features extracted, Size : {}".format(txt_fts.size()))
+
+		print(ocr_token_sents)
+		ocr_words,ocr_embeddings,ocr_lengths = self.glove.get_sentence_embedding(ocr_token_sents)
+		print("OCR Features extracted, Size : {}".format(ocr_embeddings.size()))
+
+		# attention between the grid features and text features
+		grid_text = self.grid_text_attend(txt_fts,img_grid_fts)
+		print("Grid and Text Attention Applied, Size : {}".format(grid_text.size()))
+
+		# attention between the object features and text features
+		obj_text = self.object_text_attend(txt_fts,img_obj_fts,num_objects)
+		print("Object and Text Attention Applied, Size : {}".format(obj_text.size()))
+
+		# attention between the ocr features and text features
+		ocr_text = self.ocr_text_attend(txt_fts,ocr_embeddings,ocr_lengths)
+		print("OCR and Text Attention Applied, Size : {}".format(ocr_text.size()))
+
+		# final combination
+		predictions = self.multi_modal(txt_fts,grid_text,obj_text,ocr_text,ocr_embeddings,ocr_lengths)
+		print("Prediction Made")
+
+		return predictions,ocr_words
+
+	def test(self):
+
+		for dataItem in self.devLoader :
+			
 			x = dataItem
-
 			self.optim.zero_grad()
+			self.grid_text_attend.eval()
+			self.object_text_attend.eval()
+			self.ocr_text_attend.eval()
+			self.multi_modal.eval()
 
-			self.grid_text_attend.train()
-			self.object_text_attend.train()
-			self.ocr_text_attend.train()
-			self.multi_modal.train()
-
-			#image_path,transformed_image,q,tokens,y,y_idx
+			# predictions
 			image_paths,transformed_images,qs,ocr_token_sents,y,y_idx,in_ocr = x[0], x[1], x[2], x[3], x[4], x[5], x[6]
+			predictions,ocr_words = self.forward(image_paths,transformed_images,qs,ocr_token_sents)	
 
-			# extract grid features
-			img_grid_fts = self.grid_feature_extractor(transformed_images)
-			print("Grid Features extracted, Size : {}".format(img_grid_fts.size()))
+		return
 
-			# extract object features
-			img_obj_fts,num_objects = self.object_feature_extractor(image_paths)
-			print("Object Features extracted, Size : {}".format(img_obj_fts.size()))
+	def train(self,epochs,grid_feature_extractor,
+		object_feature_extractor,text_feature_extractor):
+		
+		for i in range(epochs) :
 
-			# extract the text features
-			all_steps,txt_fts = self.text_feature_extractor(qs)
-			print("Text Features extracted, Size : {}".format(txt_fts.size()))
+			for dataItem in self.trainLoader :
 
-			# extract the OCR features
-			# print("Raw : {}".format(ocr_token_sents))
-			# print("Type : {}".format(type(ocr_token_sents)))
-			# print("A0 : {}".format(ocr_token_sents[0]))
-			# print("List A0 : {}".format(list(ocr_token_sents[0])))
-			# print("A1 : {}".format(ocr_token_sents[1]))
-			# print("A2 : {}".format(ocr_token_sents[2]))
-			# print("A3 : {}".format(ocr_token_sents[3]))
-			# print(ocr_token_sents)
-			# ocr_token_sents = list(ocr_token_sents[0])
-			# temp = []
-			# for i in range(len(ocr_token_sents)):
-			# 	temp.append(ocr_token_sents[i])
-			# ocr_token_sents = temp
-			# print("Num1 : {}".format(ocr_token_sents))
-			print(ocr_token_sents)
-			print(in_ocr)
-			ocr_words,ocr_embeddings,ocr_lengths = self.glove.get_sentence_embedding(ocr_token_sents)
-			print("OCR Features extracted, Size : {}".format(ocr_embeddings.size()))
+				x = dataItem
+				self.optim.zero_grad()
+				self.grid_text_attend.train()
+				self.object_text_attend.train()
+				self.ocr_text_attend.train()
+				self.multi_modal.train()
 
-			# attention between the grid features and text features
-			grid_text = self.grid_text_attend(txt_fts,img_grid_fts)
-			print("Grid and Text Attention Applied, Size : {}".format(grid_text.size()))
+				# predictions
+				image_paths,transformed_images,qs,ocr_token_sents,y,y_idx,in_ocr = x[0], x[1], x[2], x[3], x[4], x[5], x[6]
+				predictions,ocr_words = self.forward(grid_feature_extractor,object_feature_extractor,
+					text_feature_extractor,image_paths,transformed_images,qs,ocr_token_sents)
 
-			# attention between the object features and text features
-			obj_text = self.object_text_attend(txt_fts,img_obj_fts,num_objects)
-			print("Object and Text Attention Applied, Size : {}".format(obj_text.size()))
+				# loss functions
+				loss = self.loss_function(predictions,y,y_idx,in_ocr,ocr_words)
+				print("Calculated Loss : {}\n".format(loss.item()))
 
-			# attention between the ocr features and text features
-			ocr_text = self.ocr_text_attend(txt_fts,ocr_embeddings,ocr_lengths)
-			print("OCR and Text Attention Applied, Size : {}".format(ocr_text.size()))
+				# backward prop and optimization
+				loss.backward()
+				self.optim.step()
 
-			# final combination
-			predictions = self.multi_modal(txt_fts,grid_text,obj_text,ocr_text,ocr_embeddings,ocr_lengths)
-			print("Prediction Made")
+				torch.cuda.empty_cache()
+				gc.collect()
 
-			loss = self.loss_function(predictions,y,y_idx,in_ocr,ocr_words)
-			print("Calculated Loss : {}\n".format(loss.item()))
-
-			loss.backward()
-			self.optim.step()
-
-			if idx > 20:
-				return predictions
-
-			torch.cuda.empty_cache()
-			gc.collect()
-			#assert(False)
+			self.save_params(i)
 
 		return
 
 if __name__ == '__main__' :
 
 	# Dataloaders
-	mode = "train"
 	data_path = "/home/alex/Desktop/4-2/Text_VQA/Data/"
-	train_ID_path = os.path.join(data_path,"{}/{}_ids.txt".format(mode,mode))
-	train_json_path = os.path.join(data_path,"{}/cleaned.json".format(mode))
 	tokens_path = os.path.join(data_path,"tokens_in_images.txt")
-	trainDataset = CustomDataset(data_path,train_ID_path,train_json_path,tokens_path,(448,448),mode)
+
+	train_ID_path = os.path.join(data_path,"train/train_ids.txt")
+	train_json_path = os.path.join(data_path,"train/cleaned.json")
+	trainDataset = CustomDataset(data_path,train_ID_path,train_json_path,tokens_path,(448,448),"train")
 	trainLoader = data.DataLoader(trainDataset,batch_size=4)
 
-	# dev_ID_path = os.path.join(data_path,"dev/dev_ids.txt")
-	# dev_json_path = os.path.join(data_path,"dev/cleaned.json")
-	# devDataset = CustomDataset(data_path,dev_ID_path,
-	# 				dev_json_path,(448,448),"dev")
-	# devLoader = data.DataLoader(devDataset)
+	dev_ID_path = os.path.join(data_path,"dev/dev_ids.txt")
+	dev_json_path = os.path.join(data_path,"dev/cleaned.json")
+	devDataset = CustomDataset(data_path,dev_ID_path,dev_json_path,tokens_path,(448,448),"dev")
+	devLoader = data.DataLoader(devDataset,batch_size=4)
 
 	# Feature Extractors
 	print("Loading Bert")
@@ -307,9 +319,7 @@ if __name__ == '__main__' :
 
 	config = {}
 	config["trainLoader"] = trainLoader
-	config["text_feature_extractor"] = bert
-	config["grid_feature_extractor"] = grid_feature_extractor
-	config["object_feature_extractor"] = object_feature_extractor
+	config["devLoader"] = devLoader
 	config["vocab_size"] = VOCAB_SIZE
 	config["max_tokens"] = MAX_TOKENS
 	config["quest_dim"] = QUEST_DIM
@@ -319,6 +329,6 @@ if __name__ == '__main__' :
 	config["ocr_dim"] = OCR_DIM
 	
 	alex = Trainer(config)
-	alex.train()
+	alex.train(3,grid_feature_extractor,object_feature_extractor,bert)
 
 	
