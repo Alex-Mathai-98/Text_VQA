@@ -116,7 +116,7 @@ class Trainer() :
 							{'params' : self.ocr_text_attend.parameters()},
 							{'params' : self.multi_modal.parameters()} ],lr=5e-4)
 
-	def get_copy_log_mask(self,y,ocr_words):
+	def get_copy_mask(self,y,ocr_words):
 
 		if type(ocr_words) != np.ndarray:
 			ocr_words = np.array(ocr_words)
@@ -131,12 +131,9 @@ class Trainer() :
 		copy_mask = torch.tensor(copy_mask).float()
 		assert(copy_mask.size()==(len(y),self.MAX_TOKENS))
 
-		# Take a log of the mask
-		#copy_log_mask = torch.log(copy_mask + 1e-45)
-		#assert(copy_log_mask.size()[1]==self.MAX_TOKENS)
 		return copy_mask
 
-	def get_target_log_mask(self,y_idx,in_ocr):
+	def get_target_mask(self,y_idx,in_ocr):
 
 		# fill everything with almost 0
 		vocab_mask = torch.zeros((len(y_idx),self.VOCAB_SIZE))
@@ -154,34 +151,19 @@ class Trainer() :
 			vocab_mask[in_ocr,:] = torch.zeros((self.VOCAB_SIZE))
 			print("New Max : {}, New Min : {}".format(torch.max(vocab_mask[in_ocr]), torch.min(vocab_mask[in_ocr])))
 
-		# taking log
-		# vocab_log_mask = torch.log(vocab_mask + 1e-45)
 		return vocab_mask
 
 	def loss_function(self,predictions,y,y_idx,in_ocr,ocr_words):
 
 		in_ocr = in_ocr.byte()
 
-		#print("predictions[]")
-		#predictions = torch.log(predictions + 1e-45)
+		copy_mask = self.get_copy_mask(y,ocr_words)
+		copy_probs = predictions[:,self.VOCAB_SIZE:] * copy_mask
 
-		# Note 1 : log(prob) + log(1e-45) = log(prob*1e-45)
-		# Note 2 : exp( log(prob*1e-45) ) ~ 0
+		vocab_mask = self.get_target_mask(y_idx,in_ocr)
+		vocab_probs = predictions[:,:self.VOCAB_SIZE] * vocab_mask
 
-		# Note 3 : log(prob) + log(1) = log(prob)
-		# Note 4 : exp( log(prob ) = prob
-
-		# This is what we are doing, the log(1) and log(1e-45) are created with the mask arrs
-		# Using this mask, we get the prediction indices that are important
-		# We add up the probabilities and then take the loss function
-
-		copy_log_mask = self.get_copy_log_mask(y,ocr_words)
-		copy_log_probs = predictions[:,self.VOCAB_SIZE:] * copy_log_mask
-
-		vocab_log_mask = self.get_target_log_mask(y_idx,in_ocr)
-		vocab_log_probs = predictions[:,:self.VOCAB_SIZE] * vocab_log_mask
-
-		final_probs = torch.cat((vocab_log_probs,copy_log_probs),dim=1)
+		final_probs = torch.cat((vocab_probs,copy_probs),dim=1)
 		try :
 			print("Max 1 : {}".format(torch.max(final_probs,dim=1)[0].detach().cpu().numpy()))
 			print("Indices 1 : {}".format(torch.max(final_probs,dim=1)[1].detach().cpu().numpy()))
@@ -194,12 +176,7 @@ class Trainer() :
 			if truth != guess and in_ocr[idx]==0 :
 				print("Truth : {}, Guess : {}".format(final_probs[idx,truth],final_probs[idx,guess]))
 
-		# final_probs = torch.exp(final_probs)
-		# print("Max 2 : {}".format(torch.max(final_probs,dim=1)[0]))
-		# print("Indices 2 : {}".format(torch.max(final_probs,dim=1)[1]))
-
 		final_probs = torch.sum(final_probs,dim=1)
-
 		print("Final Probs Vector : {}".format(final_probs))
 		loss = -torch.log(final_probs+1e-45)
 		print("Loss Vector : {}".format(loss))
