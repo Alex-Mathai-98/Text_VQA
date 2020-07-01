@@ -46,7 +46,7 @@ class EndToEndOCR(nn.Module):
         """
         ocr_tokens = list()
         image = cv2.imread(image_path)
-        boxes, _, _ = self.text_detector(image_path)
+        boxes, _, _, _ = self.text_detector(image_path)
         boxes = boxes.astype(np.int32)
         for box in boxes:
             x_max, x_min = max(box[:, 0]), min(box[:, 0])
@@ -66,7 +66,7 @@ class EndToEndOCR(nn.Module):
         text region crops one by one
         """
         image = cv2.imread(image_path)
-        boxes, _, _ = self.text_detector(image_path)
+        boxes, _, _, _ = self.text_detector(image_path)
         boxes = boxes.astype(np.int32)
         for box in boxes:
             x_max, x_min = max(box[:, 0]), min(box[:, 0])
@@ -95,5 +95,5 @@ if __name__ == '__main__':
 
     # Instantiate OCR model, get tokens in the image (acc. to the model), visualize what the model saw as what
     ocr = EndToEndOCR()
-    tokens_in_image, embeddings,num_tokens = ocr(image_path)
+    tokens_in_image, embeddings, num_tokens = ocr(image_path)
     ocr.visualize_predictions(image_path)

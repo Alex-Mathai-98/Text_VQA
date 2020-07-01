@@ -240,10 +240,36 @@ def list_files(in_path):
                 continue
     return img_files, mask_files, gt_files
 
-def display(img_file, img, boxes, dirname='./inference_examples/'):
+def character_level_boxes(image: np.ndarray, region_score_map: np.ndarray):
+    """
+    Given the region score map and the image itself, 
+    generate character level boxes 
+    Make sure Region Score map is in range 0 -> 1 
+    """
+    _, thresh = cv2.threshold(np.uint8(region_score_map * 255), 128, 255, cv2.THRESH_BINARY) 
+    kernel = np.ones((3,3),np.uint8)
+    opening = cv2.morphologyEx(thresh,cv2.MORPH_OPEN, kernel, iterations = 2)
+    ret, markers = cv2.connectedComponents(opening)
+    letter_boxes = []
+
+    for i in np.unique(markers)[1:]:
+        #img = cv2.imread(image_path)
+        mask = np.zeros((image.shape[0], image.shape[1]), dtype = np.uint8)
+        mask[markers == i] = 255
+        mask = cv2.morphologyEx(mask, cv2.MORPH_DILATE, kernel, iterations = 8)
+        top, bottom = np.min(np.where(np.max(mask,axis=1)==255)), np.max(np.where(np.max(mask,axis=1)==255))
+        left, right  = np.min(np.where(np.max(mask,axis=0)==255)), np.max(np.where(np.max(mask,axis=0)==255))
+        letter_box = ((left, top), (right, bottom))
+        letter_boxes.append(np.array([(top, left), (right, bottom)]))
+        cv2.rectangle(image, letter_box[0], letter_box[1], color = (0, 255, 0))
+
+    return letter_boxes, image
+
+
+def display(img_file, img, boxes, dirname='./inference_examples/', show = True):
         img = np.array(img)
         filename, _ = os.path.splitext(os.path.basename(img_file))
-        result = dirname + "detection_" + filename + '.jpg'
+        result = os.path.join(dirname, filename +'.jpg')
         if not os.path.isdir(dirname):
             os.mkdir(dirname)
 
@@ -252,10 +278,13 @@ def display(img_file, img, boxes, dirname='./inference_examples/'):
             poly = poly.reshape(-1, 2)
             cv2.polylines(img, [poly.reshape((-1, 1, 2))], True, color=(0, 255, 0), thickness=3)
 
-        plt.figure(figsize = (20, 30))
-        plt.imshow(cv2.cvtColor(img, cv2.COLOR_BGR2RGB))
-        plt.xticks([]), plt.yticks([]), plt.show()
-        cv2.imwrite(result, img)
+        if show == True:
+            plt.figure(figsize = (20, 30))
+            plt.imshow(cv2.cvtColor(img, cv2.COLOR_BGR2RGB))
+            plt.xticks([]), plt.yticks([]), plt.show()
+        else: cv2.imwrite(result, img)
+        
+        return img
 
 def loadImage(img_file):
     img = io.imread(img_file)           
