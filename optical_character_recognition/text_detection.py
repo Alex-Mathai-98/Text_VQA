@@ -115,18 +115,18 @@ if __name__ == '__main__':
     
     image = utils.loadImage(image_path)
     refined_box_cuts, scores = utils.get_straightened_boxes(image, region_score, boxes)
-    cleaned_refined_box_cuts, refined_words, refined_word_heatmaps = utils.word_level_breakdown(refined_box_cuts, text_detector)
-    
-    #test_index = 2
-    #test_word = refined_words[test_index][0]
-    #test_heatmap = refined_word_heatmaps[test_index][0]
-    #letter_boxes, check = utils.character_level_boxes(test_word, test_heatmap)
-    #letter_boxes, check = utils.character_level_boxes(image, region_score)
-    for word in refined_words:
-        for w in word:
-            a, b = text_recognition(w)
-            print(b)
-    
+    cleaned_refined_box_cuts, refined_words, refined_word_heatmaps, orientations, final_coords = utils.word_level_breakdown(refined_box_cuts, text_detector)
+
+    tokens = []
+    for word, maps in zip(refined_words, refined_word_heatmaps):
+        string = ""
+        for w, m in zip(word, maps):
+            _, out = text_recognition(w)
+            tokens.append(out)
+            string += " " + out
+        tokens.append(string[1:])
+    cleaned_tokens = sorted(list(set(tokens)), key = lambda x: -len(x))
+    print(cleaned_tokens)
     #breakpoint()
 #    cv2.imshow("", region_score)
 #    cv2.waitKey(0)

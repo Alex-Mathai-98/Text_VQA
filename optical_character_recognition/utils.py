@@ -339,7 +339,9 @@ def get_boxes(image, region_map, boxes):
 
 def word_level_breakdown(largest_box_cuts, text_detector):
     refined_words, refined_word_heatmaps = [], []
-    cleaned_largest_box_cuts = []
+    cleaned_largest_box_cuts, final_coordinates = [], []
+    word_coords = []
+    orientations, num = [], 0
 
     for box_cut in largest_box_cuts:
         left_to_right = box_cut.shape[1] >= box_cut.shape[0]        
@@ -352,17 +354,21 @@ def word_level_breakdown(largest_box_cuts, text_detector):
         if left_to_right and len(word_cuts) > 1:
             word_cuts = [x for _, x in sorted(zip(top_lefts_l2r, word_cuts), key=lambda pair: pair[0])]
             word_heatmap = [x for _, x in sorted(zip(top_lefts_l2r, word_heatmap), key=lambda pair: pair[0])]
+            word_coords = [x for _, x in sorted(zip(top_lefts_l2r, words_coordinates), key=lambda pair: pair[0])]
         
         if not left_to_right and len(word_cuts) > 1:
             word_cuts = [x for _, x in sorted(zip(top_lefts_t2b, word_cuts), key=lambda pair: pair[0])]
             word_heatmap = [x for _, x in sorted(zip(top_lefts_t2b, word_heatmap), key=lambda pair: pair[0])]
+            word_coords = [x for _, x in sorted(zip(top_lefts_l2r, words_coordinates), key=lambda pair: pair[0])]
 
         if len(word_cuts) > 0:
             refined_words.append(word_cuts)
             refined_word_heatmaps.append(word_heatmap)
             cleaned_largest_box_cuts.append(box_cut)
+            final_coordinates.append(word_coords)
+            orientations.append(left_to_right)
 
-    return cleaned_largest_box_cuts, refined_words, refined_word_heatmaps   
+    return cleaned_largest_box_cuts, refined_words, refined_word_heatmaps, orientations, final_coordinates
     
 def display(img_file, img, boxes, dirname='./inference_examples/', show = True):
         img = np.array(img)

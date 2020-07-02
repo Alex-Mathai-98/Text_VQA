@@ -1,4 +1,5 @@
 import torch, torch.nn as nn
+import optical_character_recognition.utils as utils
 import os, random, argparse, cv2, numpy as np
 from optical_character_recognition.text_detection import TextDetection
 from optical_character_recognition.text_recognition import TextRecognition
@@ -30,7 +31,7 @@ class GloveEmbeddings(object):
 
 class EndToEndOCR(nn.Module):
     def __init__(self):
-        super().__init__()
+        super().__init__()  
         self.text_detector = TextDetection()
         self.text_recognizer = TextRecognition()
         self.embedder = GloveEmbeddings() #Use glove_file = FILEPATH to be be able to use that 
@@ -80,6 +81,24 @@ class EndToEndOCR(nn.Module):
         cv2.imshow("Complete Image", image)
         cv2.waitKey()
 
+    def get_heirarchal_preds(self, image_path):
+        boxes, polys, region_score, affinity_score = self.text_detector(image_path)
+        image = utils.loadImage(image_path)
+        refined_box_cuts, scores = utils.get_straightened_boxes(image, region_score, boxes)
+        cleaned_refined_box_cuts, refined_words, refined_word_heatmaps, orientations, final_coords = utils.word_level_breakdown(refined_box_cuts, self.text_detector)
+
+        tokens = []
+        for word, maps, rot in zip(refined_words, refined_word_heatmaps, orientations):
+            string = ""
+            for w, m in zip(word, maps):
+                _, out = self.text_recognizer(w)
+                tokens.append(out)
+                string += " " + out
+            tokens.append(string[1:])
+        cleaned_tokens = sorted(list(set(tokens)), key = lambda x: -len(x))
+
+        return tokens, cleaned_tokens, final_coords
+
 if __name__ == '__main__':
 
     # Parse single argument for custom image path
@@ -95,5 +114,5 @@ if __name__ == '__main__':
 
     # Instantiate OCR model, get tokens in the image (acc. to the model), visualize what the model saw as what
     ocr = EndToEndOCR()
-    tokens_in_image, embeddings, num_tokens = ocr(image_path)
-    ocr.visualize_predictions(image_path)
+    _, clean, _ = ocr.get_heirarchal_preds(image_path)
+    print(clean)
