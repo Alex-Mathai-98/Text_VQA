@@ -30,8 +30,11 @@ class TextDetection(nn.Module):
         
         self.refine_net.eval()
     
-    def forward(self, image_path, text_threshold = 0.7, link_threshold = 0.4, low_text = 0.4, canvas_size = 1280, mag_ratio = 1.5):
-        image = self._load_image(image_path)
+    def forward(self, image_path, text_threshold = 0.7, link_threshold = 0.4, low_text = 0.4, canvas_size = 1280, mag_ratio = 1.5, refine = True):
+        if type(image_path) == str:
+            image = self._load_image(image_path)
+        elif type(image_path) == np.ndarray:
+            image = image_path
         img_resized, target_ratio, size_heatmap = utils.resize_aspect_ratio(image, canvas_size, interpolation=cv2.INTER_LINEAR, mag_ratio=mag_ratio)
         ratio_h = ratio_w = 1 / target_ratio
 
@@ -52,36 +55,37 @@ class TextDetection(nn.Module):
         extrapolated_affinity_score = cv2.resize(affinity_score, image.shape[:2][::-1], interpolation = cv2.INTER_CUBIC)
 
         # refine link
-        with torch.no_grad():
-            y_refiner = self.refine_net(y, feature)
-        refiner_affinity_score = y_refiner[0,:,:,0].cpu().data.numpy()
+        if refine:
+            with torch.no_grad():
+                y_refiner = self.refine_net(y, feature)
+            affinity_score = y_refiner[0,:,:,0].cpu().data.numpy()
         
         # Post-processing
         boxes, polys = utils.getDetBoxes(region_score, affinity_score, text_threshold, link_threshold, low_text, True)
-        refined_boxes, refined_polys = utils.getDetBoxes(region_score, refiner_affinity_score, text_threshold, link_threshold, low_text, True)
+        #refined_boxes, refined_polys = utils.getDetBoxes(region_score, refiner_affinity_score, text_threshold, link_threshold, low_text, True)
 
         # coordinate adjustment
         boxes = utils.adjustResultCoordinates(boxes, ratio_w, ratio_h)
         polys = utils.adjustResultCoordinates(polys, ratio_w, ratio_h)
-        refined_boxes = utils.adjustResultCoordinates(refined_boxes, ratio_w, ratio_h)
-        refined_polys = utils.adjustResultCoordinates(refined_polys, ratio_w, ratio_h)
+        #refined_boxes = utils.adjustResultCoordinates(refined_boxes, ratio_w, ratio_h)
+        #refined_polys = utils.adjustResultCoordinates(refined_polys, ratio_w, ratio_h)
         
         for k in range(len(polys)):
             if polys[k] is None: polys[k] = boxes[k]
 
-        for k in range(len(refined_polys)):
-            if refined_polys[k] is None: refined_polys[k] = refined_boxes[k]
+        #for k in range(len(refined_polys)):
+        #    if refined_polys[k] is None: refined_polys[k] = refined_boxes[k]
 
-        boxes, polys = np.concatenate([boxes, refined_boxes], axis = 0), np.concatenate([polys, refined_polys], axis = 0)
+        #boxes, polys = np.concatenate([boxes, refined_boxes], axis = 0), np.concatenate([polys, refined_polys], axis = 0)
 
         return boxes, polys, extrapolated_region_score, extrapolated_affinity_score 
 
     def _load_image(self, image_path):
         return utils.loadImage(image_path)
 
-    def display(self, image_path, result_folder, show = True, threshold = 0.9):
+    def display(self, image_path, result_folder = '.', show = True, threshold = 0.9, refine = True):
         image = self._load_image(image_path)
-        boxes, polys, _, _ = self.forward(image_path, text_threshold=threshold)
+        boxes, polys, _, _ = self.forward(image_path, text_threshold=threshold, refine = refine)
         image = utils.display(image_path, image[:,:,::-1], polys, dirname=result_folder, show = show)
         return image, boxes, polys   
 
@@ -106,12 +110,23 @@ if __name__ == '__main__':
         image_path = args.test_image
     
     text_detector = TextDetection().to(device)
+    text_recognition = TextRecognition().to(device)
     boxes, polys, region_score, affinity_score = text_detector(image_path)
     
-    image = cv2.imread(image_path)
-    letter_boxes, image = utils.character_level_boxes(image, region_score)
+    image = utils.loadImage(image_path)
+    refined_box_cuts, scores = utils.get_straightened_boxes(image, region_score, boxes)
+    cleaned_refined_box_cuts, refined_words, refined_word_heatmaps = utils.word_level_breakdown(refined_box_cuts, text_detector)
     
-    # Test it out 
-    print(letter_boxes)
-    cv2.imshow("", image)
-    cv2.waitKey(0)
+    #test_index = 2
+    #test_word = refined_words[test_index][0]
+    #test_heatmap = refined_word_heatmaps[test_index][0]
+    #letter_boxes, check = utils.character_level_boxes(test_word, test_heatmap)
+    #letter_boxes, check = utils.character_level_boxes(image, region_score)
+    for word in refined_words:
+        for w in word:
+            a, b = text_recognition(w)
+            print(b)
+    
+    #breakpoint()
+#    cv2.imshow("", region_score)
+#    cv2.waitKey(0)

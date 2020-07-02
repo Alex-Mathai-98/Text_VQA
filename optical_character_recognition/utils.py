@@ -4,6 +4,7 @@ from skimage import io
 from torch.autograd import Variable
 from PIL import Image
 from collections import OrderedDict
+import imutils
 
 def warpCoord(Minv, pt):
     out = np.matmul(Minv, (pt[0], pt[1], 1))
@@ -256,16 +257,113 @@ def character_level_boxes(image: np.ndarray, region_score_map: np.ndarray):
         #img = cv2.imread(image_path)
         mask = np.zeros((image.shape[0], image.shape[1]), dtype = np.uint8)
         mask[markers == i] = 255
-        mask = cv2.morphologyEx(mask, cv2.MORPH_DILATE, kernel, iterations = 8)
+        mask = cv2.morphologyEx(mask, cv2.MORPH_DILATE, kernel, iterations = 12)
         top, bottom = np.min(np.where(np.max(mask,axis=1)==255)), np.max(np.where(np.max(mask,axis=1)==255))
         left, right  = np.min(np.where(np.max(mask,axis=0)==255)), np.max(np.where(np.max(mask,axis=0)==255))
         letter_box = ((left, top), (right, bottom))
         letter_boxes.append(np.array([(top, left), (right, bottom)]))
-        cv2.rectangle(image, letter_box[0], letter_box[1], color = (0, 255, 0))
+        cv2.rectangle(image, letter_box[1], letter_box[0], color = (0, 255, 0))
 
     return letter_boxes, image
 
 
+def get_straightened_boxes(image, region_map, boxes):
+    """
+    Take all the slant boxes and return a list of images that are straightened 
+    Make sure box co-ordinates makes sense and is within the image 
+    all images must be cv2 read (They use BGR for some reason)
+    """
+    words, region_scores = [], []
+    for cnt in boxes:
+        rect = cv2.minAreaRect(cnt)
+        box = np.int0(cv2.boxPoints(rect))
+        box = np.array([[list(b)] for b in box])
+
+        #cv2.drawContours(image, [box], 0, (0, 0, 255), 2)
+        width = int(rect[1][0])
+        height = int(rect[1][1])
+
+        src_pts = box.astype("float32")
+        # coordinate of the points in box points after the rectangle has been
+        # straightened
+
+        dst_pts = np.array([[0, height-1],
+                            [0, 0],
+                            [width-1, 0],
+                            [width-1, height-1]], dtype="float32")
+
+
+        # the perspective transformation matrix
+        M = cv2.getPerspectiveTransform(src_pts, dst_pts)
+
+        # directly warp the rotated rectangle to get the straightened rectangle
+        warped_region_cut = cv2.warpPerspective(region_map, M, (width, height)) 
+        warped = cv2.warpPerspective(image, M, (width, height))
+        words.append(warped)
+        region_scores.append(warped_region_cut)
+        #breakpoint()
+        warped_rotate = warped.transpose((1, 0, 2))[::-1]
+        region_rot = warped_region_cut.transpose((1, 0))[::-1]
+        words.append(warped_rotate)
+        region_scores.append(region_rot)
+    return words, region_scores
+
+def get_boxes(image, region_map, boxes):
+    """
+    Take all the slant boxes and return a list of images that are straightened 
+    Make sure box co-ordinates makes sense and is within the image 
+    all images must be cv2 read (They use BGR for some reason)
+    """
+    words, region_scores = [], []
+    top_lefts, bottom_rights = [], []
+    for cnt in boxes:
+        rect = cv2.minAreaRect(cnt)
+        box = np.absolute(np.int0(cv2.boxPoints(rect)))
+        top_left, bottom_right = tuple(box[1]), tuple(box[3])
+        top_lefts.append(top_left)
+        bottom_rights.append(bottom_right)
+        """
+        img = image.copy()
+        print(top_left, bottom_right)
+        cv2.rectangle(img, top_left, bottom_right, (0, 255, 0))
+        cv2.imshow("", img)
+        cv2.waitKey(0)
+        """
+        word_image = image[min(top_left[1], bottom_right[1]): max(top_left[1], bottom_right[1]), min(top_left[0], bottom_right[0]): max(top_left[0], bottom_right[0]), :]
+        word_map = region_map[min(top_left[1], bottom_right[1]): max(top_left[1], bottom_right[1]), min(top_left[0], bottom_right[0]): max(top_left[0], bottom_right[0])]
+
+        region_scores.append(word_map)
+        words.append(word_image)
+    
+    return words, region_scores, top_lefts, bottom_rights
+
+def word_level_breakdown(largest_box_cuts, text_detector):
+    refined_words, refined_word_heatmaps = [], []
+    cleaned_largest_box_cuts = []
+
+    for box_cut in largest_box_cuts:
+        left_to_right = box_cut.shape[1] >= box_cut.shape[0]        
+        words_coordinates, _, temp_region_score, _ = text_detector(box_cut, refine = False)
+        word_cuts, word_heatmap, top_lefts, bottom_rights = get_boxes(box_cut, temp_region_score, words_coordinates)
+        
+        top_lefts_l2r = [x[0] for x in top_lefts]
+        top_lefts_t2b = [x[1] for x in top_lefts]
+
+        if left_to_right and len(word_cuts) > 1:
+            word_cuts = [x for _, x in sorted(zip(top_lefts_l2r, word_cuts), key=lambda pair: pair[0])]
+            word_heatmap = [x for _, x in sorted(zip(top_lefts_l2r, word_heatmap), key=lambda pair: pair[0])]
+        
+        if not left_to_right and len(word_cuts) > 1:
+            word_cuts = [x for _, x in sorted(zip(top_lefts_t2b, word_cuts), key=lambda pair: pair[0])]
+            word_heatmap = [x for _, x in sorted(zip(top_lefts_t2b, word_heatmap), key=lambda pair: pair[0])]
+
+        if len(word_cuts) > 0:
+            refined_words.append(word_cuts)
+            refined_word_heatmaps.append(word_heatmap)
+            cleaned_largest_box_cuts.append(box_cut)
+
+    return cleaned_largest_box_cuts, refined_words, refined_word_heatmaps   
+    
 def display(img_file, img, boxes, dirname='./inference_examples/', show = True):
         img = np.array(img)
         filename, _ = os.path.splitext(os.path.basename(img_file))
@@ -287,7 +385,7 @@ def display(img_file, img, boxes, dirname='./inference_examples/', show = True):
         return img
 
 def loadImage(img_file):
-    img = io.imread(img_file)           
+    img = cv2.imread(img_file)           
     if img.shape[0] == 2: img = img[0]
     if len(img.shape) == 2 : img = cv2.cvtColor(img, cv2.COLOR_GRAY2RGB)
     if img.shape[2] == 4:   img = img[:,:,:3]
