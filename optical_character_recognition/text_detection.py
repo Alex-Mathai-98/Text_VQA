@@ -22,7 +22,6 @@ class TextDetection(nn.Module):
         self.model.eval()
     
         self.refine_net = RefineNet()
-        print('Loading weights of refiner from checkpoint (' + self.refiner_model + ')')
         if torch.cuda.is_available():
             self.refine_net.load_state_dict(utils.copyStateDict(torch.load(self.refiner_model)))
             self.refine_net = self.refine_net.cuda()
@@ -110,23 +109,23 @@ if __name__ == '__main__':
         image_path = args.test_image
     
     text_detector = TextDetection().to(device)
-    text_recognition = TextRecognition().to(device)
+    text_recognizer = TextRecognition().to(device)
     boxes, polys, region_score, affinity_score = text_detector(image_path)
-    
     image = utils.loadImage(image_path)
     refined_box_cuts, scores = utils.get_straightened_boxes(image, region_score, boxes)
     cleaned_refined_box_cuts, refined_words, refined_word_heatmaps, orientations, final_coords = utils.word_level_breakdown(refined_box_cuts, text_detector)
 
     tokens = []
-    for word, maps in zip(refined_words, refined_word_heatmaps):
+    for word, maps, rot in zip(refined_words, refined_word_heatmaps, orientations):
         string = ""
         for w, m in zip(word, maps):
-            _, out = text_recognition(w)
+            if not rot:
+                letter_boxes, _, vert_pred = utils.get_characters_top_down(w, m, text_recognizer)
+                if len(vert_pred) > 1:
+                    tokens.append(vert_pred)
+            _, out = text_recognizer(w)
             tokens.append(out)
             string += " " + out
         tokens.append(string[1:])
     cleaned_tokens = sorted(list(set(tokens)), key = lambda x: -len(x))
     print(cleaned_tokens)
-    #breakpoint()
-#    cv2.imshow("", region_score)
-#    cv2.waitKey(0)

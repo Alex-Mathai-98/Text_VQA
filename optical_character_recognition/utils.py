@@ -241,7 +241,7 @@ def list_files(in_path):
                 continue
     return img_files, mask_files, gt_files
 
-def character_level_boxes(image: np.ndarray, region_score_map: np.ndarray):
+def get_character_level_boxes(image: np.ndarray, region_score_map: np.ndarray):
     """
     Given the region score map and the image itself, 
     generate character level boxes 
@@ -262,10 +262,37 @@ def character_level_boxes(image: np.ndarray, region_score_map: np.ndarray):
         left, right  = np.min(np.where(np.max(mask,axis=0)==255)), np.max(np.where(np.max(mask,axis=0)==255))
         letter_box = ((left, top), (right, bottom))
         letter_boxes.append(np.array([(top, left), (right, bottom)]))
-        cv2.rectangle(image, letter_box[1], letter_box[0], color = (0, 255, 0))
+        vis = cv2.rectangle(image, letter_box[1], letter_box[0], color = (0, 255, 0))
 
     return letter_boxes, image
 
+def get_characters_top_down(image: np.ndarray, region_score_map: np.ndarray, text_recognizer):
+    """
+    Given the region score map and the image itself, 
+    generate character level boxes 
+    Make sure Region Score map is in range 0 -> 1 
+    """
+    _, thresh = cv2.threshold(np.uint8(region_score_map * 255), 128, 255, cv2.THRESH_BINARY) 
+    kernel = np.ones((3,3),np.uint8)
+    opening = cv2.morphologyEx(thresh,cv2.MORPH_OPEN, kernel, iterations = 6)
+    ret, markers = cv2.connectedComponents(opening)
+    letter_boxes = []
+    current_str = ""
+
+    for i in np.unique(markers)[1:]:
+        mask = np.zeros((image.shape[0], image.shape[1]), dtype = np.uint8)
+        mask[markers == i] = 255
+        mask = cv2.morphologyEx(mask, cv2.MORPH_DILATE, kernel, iterations = 15)
+        top, bottom = np.min(np.where(np.max(mask,axis=1)==255)), np.max(np.where(np.max(mask,axis=1)==255))
+        left, right = 0, mask.shape[1]
+        letter_box = ((left, top), (right, bottom))
+        letter_crop = image[top: bottom, left: right, :]
+        _, pred_letter = text_recognizer(letter_crop)
+        pred_letter = str(pred_letter)[0]
+        current_str += pred_letter
+        letter_boxes.append(np.array([(top, left), (right, bottom)]))
+
+    return letter_boxes, image, current_str
 
 def get_straightened_boxes(image, region_map, boxes):
     """
@@ -337,38 +364,43 @@ def get_boxes(image, region_map, boxes):
     
     return words, region_scores, top_lefts, bottom_rights
 
-def word_level_breakdown(largest_box_cuts, text_detector):
+def word_level_breakdown(largest_box_cuts, text_detector, boxes):
     refined_words, refined_word_heatmaps = [], []
     cleaned_largest_box_cuts, final_coordinates = [], []
-    word_coords = []
+    word_coords, final_boxes, ffb = [], [], []
     orientations, num = [], 0
 
-    for box_cut in largest_box_cuts:
+    for box in boxes:
+        final_boxes.append(box)
+        final_boxes.append(box)
+        
+    for box_cut, fb in zip(largest_box_cuts, final_boxes):
         left_to_right = box_cut.shape[1] >= box_cut.shape[0]        
         words_coordinates, _, temp_region_score, _ = text_detector(box_cut, refine = False)
         word_cuts, word_heatmap, top_lefts, bottom_rights = get_boxes(box_cut, temp_region_score, words_coordinates)
-        
         top_lefts_l2r = [x[0] for x in top_lefts]
         top_lefts_t2b = [x[1] for x in top_lefts]
 
         if left_to_right and len(word_cuts) > 1:
             word_cuts = [x for _, x in sorted(zip(top_lefts_l2r, word_cuts), key=lambda pair: pair[0])]
             word_heatmap = [x for _, x in sorted(zip(top_lefts_l2r, word_heatmap), key=lambda pair: pair[0])]
-            word_coords = [x for _, x in sorted(zip(top_lefts_l2r, words_coordinates), key=lambda pair: pair[0])]
+            #words_coordinates = [x for _, x in sorted(zip(top_lefts_l2r, words_coordinates), key=lambda pair: pair[0])]
         
         if not left_to_right and len(word_cuts) > 1:
             word_cuts = [x for _, x in sorted(zip(top_lefts_t2b, word_cuts), key=lambda pair: pair[0])]
             word_heatmap = [x for _, x in sorted(zip(top_lefts_t2b, word_heatmap), key=lambda pair: pair[0])]
-            word_coords = [x for _, x in sorted(zip(top_lefts_l2r, words_coordinates), key=lambda pair: pair[0])]
+            #words_coordinates = [x for _, x in sorted(zip(top_lefts_l2r, words_coordinates), key=lambda pair: pair[0])]
 
         if len(word_cuts) > 0:
             refined_words.append(word_cuts)
             refined_word_heatmaps.append(word_heatmap)
             cleaned_largest_box_cuts.append(box_cut)
-            final_coordinates.append(word_coords)
+            final_coordinates.append(words_coordinates)
             orientations.append(left_to_right)
+            ffb.append(fb)
+            #breakpoint()
 
-    return cleaned_largest_box_cuts, refined_words, refined_word_heatmaps, orientations, final_coordinates
+    return cleaned_largest_box_cuts, refined_words, refined_word_heatmaps, orientations, final_coordinates, ffb
     
 def display(img_file, img, boxes, dirname='./inference_examples/', show = True):
         img = np.array(img)

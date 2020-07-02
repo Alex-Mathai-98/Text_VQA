@@ -58,7 +58,7 @@ class EndToEndOCR(nn.Module):
         embeddings = []
         for token in ocr_tokens:
             embeddings.append(self.embedder.get_embedding(token))
-        return ocr_tokens, embeddings,len(ocr_tokens)
+        return ocr_tokens, embeddings, len(ocr_tokens)
     
     def visualize_predictions(self, image_path):
         """
@@ -85,19 +85,33 @@ class EndToEndOCR(nn.Module):
         boxes, polys, region_score, affinity_score = self.text_detector(image_path)
         image = utils.loadImage(image_path)
         refined_box_cuts, scores = utils.get_straightened_boxes(image, region_score, boxes)
-        cleaned_refined_box_cuts, refined_words, refined_word_heatmaps, orientations, final_coords = utils.word_level_breakdown(refined_box_cuts, self.text_detector)
+        cleaned_refined_box_cuts, refined_words, refined_word_heatmaps, orientations, final_coords, overall_boxes = utils.word_level_breakdown(refined_box_cuts, self.text_detector, boxes)
 
         tokens = []
+        locations = []
+        ind1 =  0 
         for word, maps, rot in zip(refined_words, refined_word_heatmaps, orientations):
             string = ""
+            ind2 = 0
             for w, m in zip(word, maps):
+
+                if not rot:
+                    letter_boxes, _, vert_pred = utils.get_characters_top_down(w, m, self.text_recognizer)
+                    if len(vert_pred) > 1:
+                        tokens.append(vert_pred)
+                        locations.append(final_coords[ind1][ind2])
+                
                 _, out = self.text_recognizer(w)
                 tokens.append(out)
+                #breakpoint()
+                locations.append(final_coords[ind1][ind2])
+                ind2 += 1
                 string += " " + out
             tokens.append(string[1:])
+            locations.append(overall_boxes[ind1])
+            ind1 += 1
         cleaned_tokens = sorted(list(set(tokens)), key = lambda x: -len(x))
-
-        return tokens, cleaned_tokens, final_coords
+        return tokens, cleaned_tokens, refined_words, locations
 
 if __name__ == '__main__':
 
@@ -111,8 +125,8 @@ if __name__ == '__main__':
         image_path = os.path.join(args.image_path, random.choice(os.listdir(args.image_path)))
     else: 
         image_path = args.image_path
-
+    image = cv2.imread(image_path)
     # Instantiate OCR model, get tokens in the image (acc. to the model), visualize what the model saw as what
     ocr = EndToEndOCR()
-    _, clean, _ = ocr.get_heirarchal_preds(image_path)
-    print(clean)
+    tokens, clean, refi, locs = ocr.get_heirarchal_preds(image_path)
+    breakpoint()

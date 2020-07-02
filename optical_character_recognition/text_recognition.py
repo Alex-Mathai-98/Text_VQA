@@ -4,7 +4,7 @@ from torch.autograd import Variable
 from PIL import Image
 
 class TextRecognition(nn.Module):
-    def __init__(self, model_path = './optical_character_recognition/pretrained_models/crnn.pth', alphabet = '0123456789abcdefghijklmnopqrstuvwxyz', model = 'CRNN'):
+    def __init__(self, model_path = './optical_character_recognition/pretrained_models/crnn.pth', alphabet = '0123456789abcdefghijklmnopqrstuvwxyz. ', model = 'CRNN'):
         super().__init__()
         if model == 'CRNN':
             self.model = models.CRNN(32, 1, 37, 256)
