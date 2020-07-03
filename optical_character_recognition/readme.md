@@ -13,9 +13,9 @@ Run the below line from `Text_VQA` as current dir
     >>> python3 -m optical_character_recognition.text_detection --test_folder=/path/to/folder/of/images
 
 It was published in last years CVPR and the model is called CRAFT. It works extremely well, but there probably is a problem with the way I have changed the code, as on CPU (mine) it takes a while to infer (might be the method itself, idk). I feel its a bug somewhere, will fix soon and extend to full OCR. Some examples are below.
-
-![](https://github.com/Alex-Mathai-98/Text_VQA/blob/master/optical_character_recognition/inference_examples/plane_with_refiner.png)
-![](https://github.com/Alex-Mathai-98/Text_VQA/blob/master/optical_character_recognition/inference_examples/tabasco_with_refiner.png)
+| Plane | Tabasco Label |
+| :---: | :---: |
+| ![](https://github.com/Alex-Mathai-98/Text_VQA/blob/master/optical_character_recognition/inference_examples/plane_with_refiner.png) | ![](https://github.com/Alex-Mathai-98/Text_VQA/blob/master/optical_character_recognition/inference_examples/tabasco_with_refiner.png) |
 
 ## Text Recognition 
 Once text detection is done, the polygons are cropped containing the text, and passed through a text recognition model. Text recognition model used is CRNN. Run using - 
