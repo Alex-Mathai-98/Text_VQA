@@ -8,6 +8,9 @@ from optical_character_recognition.text_recognition import TextRecognition
 
 class TextDetection(nn.Module):
     def __init__(self, trained_model = 'optical_character_recognition/pretrained_models/craft_mlt_25k.pth', refiner_model = 'optical_character_recognition/pretrained_models/craft_refiner_CTW1500.pth'):
+        """
+        Text Detection for boxing the text in any given image 
+        """
         super().__init__()
         self.refiner_model = refiner_model
         self.trained_model = trained_model
@@ -16,12 +19,11 @@ class TextDetection(nn.Module):
         if torch.cuda.is_available():
             self.model.load_state_dict(utils.copyStateDict(torch.load(self.trained_model)))
             self.model = self.model.cuda()
-
-        else:
-            self.model.load_state_dict(utils.copyStateDict(torch.load(self.trained_model, map_location='cpu')))
+        else: self.model.load_state_dict(utils.copyStateDict(torch.load(self.trained_model, map_location='cpu')))
+        
         self.model.eval()
-    
         self.refine_net = RefineNet()
+
         if torch.cuda.is_available():
             self.refine_net.load_state_dict(utils.copyStateDict(torch.load(self.refiner_model)))
             self.refine_net = self.refine_net.cuda()
@@ -30,13 +32,19 @@ class TextDetection(nn.Module):
         self.refine_net.eval()
     
     def forward(self, image_path, text_threshold = 0.7, link_threshold = 0.4, low_text = 0.4, canvas_size = 1280, mag_ratio = 1.5, refine = True):
+        """
+        Given image path return boxes/polys for refined or unrefined model. Most the arguments are self explanatory, 
+        refine is the flag to use phrases (refine = True) or not (refine = False)   
+        """
+        # Load image if required 
         if type(image_path) == str:
-            image = self._load_image(image_path)
+            image = utils.loadImage(image_path)
         elif type(image_path) == np.ndarray:
             image = image_path
+
+        # Typical pre-processing - normalize, resize, convert to batch
         img_resized, target_ratio, size_heatmap = utils.resize_aspect_ratio(image, canvas_size, interpolation=cv2.INTER_LINEAR, mag_ratio=mag_ratio)
         ratio_h = ratio_w = 1 / target_ratio
-
         x = utils.normalizeMeanVariance(img_resized)
         x = torch.from_numpy(x).permute(2, 0, 1)    
         x = Variable(x.unsqueeze(0))                
@@ -47,7 +55,7 @@ class TextDetection(nn.Module):
         with torch.no_grad():
             y, feature = self.model(x)
 
-        # make score and link map
+        # make region and affinity score map
         region_score = y[0,:,:,0].cpu().data.numpy()
         affinity_score = y[0,:,:,1].cpu().data.numpy()
         extrapolated_region_score = cv2.resize(region_score, image.shape[:2][::-1], interpolation = cv2.INTER_CUBIC)
@@ -69,21 +77,17 @@ class TextDetection(nn.Module):
         #refined_boxes = utils.adjustResultCoordinates(refined_boxes, ratio_w, ratio_h)
         #refined_polys = utils.adjustResultCoordinates(refined_polys, ratio_w, ratio_h)
         
+        # If not a polygon, just use the box 
         for k in range(len(polys)):
             if polys[k] is None: polys[k] = boxes[k]
 
-        #for k in range(len(refined_polys)):
-        #    if refined_polys[k] is None: refined_polys[k] = refined_boxes[k]
-
-        #boxes, polys = np.concatenate([boxes, refined_boxes], axis = 0), np.concatenate([polys, refined_polys], axis = 0)
-
         return boxes, polys, extrapolated_region_score, extrapolated_affinity_score 
 
-    def _load_image(self, image_path):
-        return utils.loadImage(image_path)
-
     def display(self, image_path, result_folder = '.', show = True, threshold = 0.9, refine = True):
-        image = self._load_image(image_path)
+        """
+        Display the image with all the text boxes for verification 
+        """
+        image = utils.loadImage(image_path)
         boxes, polys, _, _ = self.forward(image_path, text_threshold=threshold, refine = refine)
         image = utils.display(image_path, image[:,:,::-1], polys, dirname=result_folder, show = show)
         return image, boxes, polys   
@@ -97,35 +101,4 @@ if __name__ == '__main__':
     args = parser.parse_args()
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-
     result_folder = './optical_character_recognition/inference_examples/'
-    os.makedirs(result_folder, exist_ok = True)
-
-    image_root = args.test_folder
-    image_dir = os.listdir(image_root)
-    image_path = os.path.join(image_root, random.choice(image_dir))
-
-    if args.test_image:
-        image_path = args.test_image
-    
-    text_detector = TextDetection().to(device)
-    text_recognizer = TextRecognition().to(device)
-    boxes, polys, region_score, affinity_score = text_detector(image_path)
-    image = utils.loadImage(image_path)
-    refined_box_cuts, scores = utils.get_straightened_boxes(image, region_score, boxes)
-    cleaned_refined_box_cuts, refined_words, refined_word_heatmaps, orientations, final_coords = utils.word_level_breakdown(refined_box_cuts, text_detector)
-
-    tokens = []
-    for word, maps, rot in zip(refined_words, refined_word_heatmaps, orientations):
-        string = ""
-        for w, m in zip(word, maps):
-            if not rot:
-                letter_boxes, _, vert_pred = utils.get_characters_top_down(w, m, text_recognizer)
-                if len(vert_pred) > 1:
-                    tokens.append(vert_pred)
-            _, out = text_recognizer(w)
-            tokens.append(out)
-            string += " " + out
-        tokens.append(string[1:])
-    cleaned_tokens = sorted(list(set(tokens)), key = lambda x: -len(x))
-    print(cleaned_tokens)

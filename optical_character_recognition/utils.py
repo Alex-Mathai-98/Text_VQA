@@ -26,8 +26,10 @@ def getDetBoxes_core(textmap, linkmap, text_threshold, link_threshold, low_text)
     ret, text_score = cv2.threshold(textmap, low_text, 1, 0)
     ret, link_score = cv2.threshold(linkmap, link_threshold, 1, 0)
     text_score_comb = np.clip(text_score + link_score, 0, 1)
+    
     nLabels, labels, stats, centroids = cv2.connectedComponentsWithStats(text_score_comb.astype(np.uint8), connectivity=4)
     det, mapper = [], []
+    
     for k in range(1,nLabels):
         size = stats[k, cv2.CC_STAT_AREA]
         if size < 10: continue
@@ -36,6 +38,7 @@ def getDetBoxes_core(textmap, linkmap, text_threshold, link_threshold, low_text)
         segmap = np.zeros(textmap.shape, dtype=np.uint8)
         segmap[labels==k] = 255
         segmap[np.logical_and(link_score==1, text_score==0)] = 0   # remove link area
+        
         x, y = stats[k, cv2.CC_STAT_LEFT], stats[k, cv2.CC_STAT_TOP]
         w, h = stats[k, cv2.CC_STAT_WIDTH], stats[k, cv2.CC_STAT_HEIGHT]
         niter = int(math.sqrt(size * min(w, h) / (w * h)) * 2)
@@ -46,6 +49,7 @@ def getDetBoxes_core(textmap, linkmap, text_threshold, link_threshold, low_text)
         if sy < 0 : sy = 0
         if ex >= img_w: ex = img_w
         if ey >= img_h: ey = img_h
+        
         kernel = cv2.getStructuringElement(cv2.MORPH_RECT,(1 + niter, 1 + niter))
         segmap[sy:ey, sx:ex] = cv2.dilate(segmap[sy:ey, sx:ex], kernel)
         
@@ -57,6 +61,7 @@ def getDetBoxes_core(textmap, linkmap, text_threshold, link_threshold, low_text)
         # align diamond-shape
         w, h = np.linalg.norm(box[0] - box[1]), np.linalg.norm(box[1] - box[2])
         box_ratio = max(w, h) / (min(w, h) + 1e-5)
+        
         if abs(1 - box_ratio) <= 0.1:
             l, r = min(np_contours[:,0]), max(np_contours[:,0])
             t, b = min(np_contours[:,1]), max(np_contours[:,1])
@@ -72,6 +77,7 @@ def getDetBoxes_core(textmap, linkmap, text_threshold, link_threshold, low_text)
 
 def getPoly_core(boxes, labels, mapper, linkmap):
     num_cp, max_len_ratio, expand_ratio, max_r, step_r, polys = 5, 0.7, 1.45, 2.0, 0.2, []
+    
     for k, box in enumerate(boxes):
         w, h = int(np.linalg.norm(box[0] - box[1]) + 1), int(np.linalg.norm(box[1] - box[2]) + 1)
         if w < 10 or h < 10:
@@ -81,6 +87,7 @@ def getPoly_core(boxes, labels, mapper, linkmap):
         tar = np.float32([[0,0],[w,0],[w,h],[0,h]])
         M = cv2.getPerspectiveTransform(box, tar)
         word_label = cv2.warpPerspective(labels, M, (w, h), flags=cv2.INTER_NEAREST)
+        
         try: Minv = np.linalg.inv(M)
         except: polys.append(None); continue
 
@@ -111,8 +118,10 @@ def getPoly_core(boxes, labels, mapper, linkmap):
         seg_num = 0
         num_sec = 0
         prev_h = -1
+        
         for i in range(0,len(cp)):
             (x, sy, ey) = cp[i]
+            
             if (seg_num + 1) * seg_w <= x and seg_num <= tot_seg:
                 
                 # average previous segment
@@ -129,6 +138,7 @@ def getPoly_core(boxes, labels, mapper, linkmap):
             cur_h = ey - sy + 1
             cp_section[seg_num] = [cp_section[seg_num][0] + x, cp_section[seg_num][1] + cy]
             num_sec += 1
+            
             if seg_num % 2 == 0: continue 
             if prev_h < cur_h:
                 pp[int((seg_num - 1)/2)] = (x, cy)
@@ -151,9 +161,11 @@ def getPoly_core(boxes, labels, mapper, linkmap):
         for i, (x, cy) in enumerate(pp):
             dx = cp_section[i * 2 + 2][0] - cp_section[i * 2][0]
             dy = cp_section[i * 2 + 2][1] - cp_section[i * 2][1]
+            
             if dx == 0: 
                 new_pp.append([x, cy - half_char_h, x, cy + half_char_h])
                 continue
+            
             rad = - math.atan2(dy, dx)
             c, s = half_char_h * math.cos(rad), half_char_h * math.sin(rad)
             new_pp.append([x - s, cy - c, x + s, cy + c])
@@ -162,24 +174,30 @@ def getPoly_core(boxes, labels, mapper, linkmap):
         isSppFound, isEppFound = False, False
         grad_s = (pp[1][1] - pp[0][1]) / (pp[1][0] - pp[0][0]) + (pp[2][1] - pp[1][1]) / (pp[2][0] - pp[1][0])
         grad_e = (pp[-2][1] - pp[-1][1]) / (pp[-2][0] - pp[-1][0]) + (pp[-3][1] - pp[-2][1]) / (pp[-3][0] - pp[-2][0])
+        
         for r in np.arange(0.5, max_r, step_r):
             dx = 2 * half_char_h * r
+            
             if not isSppFound:
                 line_img = np.zeros(word_label.shape, dtype=np.uint8)
                 dy = grad_s * dx
                 p = np.array(new_pp[0]) - np.array([dx, dy, dx, dy])
                 cv2.line(line_img, (int(p[0]), int(p[1])), (int(p[2]), int(p[3])), 1, thickness=1)
+                
                 if np.sum(np.logical_and(word_label, line_img)) == 0 or r + 2 * step_r >= max_r:
                     spp = p
                     isSppFound = True
+            
             if not isEppFound:
                 line_img = np.zeros(word_label.shape, dtype=np.uint8)
                 dy = grad_e * dx
                 p = np.array(new_pp[-1]) + np.array([dx, dy, dx, dy])
                 cv2.line(line_img, (int(p[0]), int(p[1])), (int(p[2]), int(p[3])), 1, thickness=1)
+                
                 if np.sum(np.logical_and(word_label, line_img)) == 0 or r + 2 * step_r >= max_r:
                     epp = p
                     isEppFound = True
+            
             if isSppFound and isEppFound:
                 break
 
@@ -190,12 +208,16 @@ def getPoly_core(boxes, labels, mapper, linkmap):
         # make final polygon
         poly = []
         poly.append(warpCoord(Minv, (spp[0], spp[1])))
+        
         for p in new_pp:
             poly.append(warpCoord(Minv, (p[0], p[1])))
+        
         poly.append(warpCoord(Minv, (epp[0], epp[1])))
         poly.append(warpCoord(Minv, (epp[2], epp[3])))
+        
         for p in reversed(new_pp):
             poly.append(warpCoord(Minv, (p[2], p[3])))
+        
         poly.append(warpCoord(Minv, (spp[2], spp[3])))
 
         # add to final result
@@ -205,20 +227,19 @@ def getPoly_core(boxes, labels, mapper, linkmap):
 
 def getDetBoxes(textmap, linkmap, text_threshold, link_threshold, low_text, poly=False):
     boxes, labels, mapper = getDetBoxes_core(textmap, linkmap, text_threshold, link_threshold, low_text)
-
-    if poly:
-        polys = getPoly_core(boxes, labels, mapper, linkmap)
-    else:
-        polys = [None] * len(boxes)
-
+    if poly: polys = getPoly_core(boxes, labels, mapper, linkmap)
+    else: polys = [None] * len(boxes)
     return boxes, polys
 
 def adjustResultCoordinates(polys, ratio_w, ratio_h, ratio_net = 2):
+    
     if len(polys) > 0:
         polys = np.array(polys)
+        
         for k in range(len(polys)):
             if polys[k] is not None:
                 polys[k] *= (ratio_w * ratio_net, ratio_h * ratio_net)
+    
     return polys
 
 def get_files(img_dir):
@@ -227,24 +248,30 @@ def get_files(img_dir):
 
 def list_files(in_path):
     img_files, mask_files, gt_files = [], [], []
+    
     for (dirpath, dirnames, filenames) in os.walk(in_path):
+        
         for file in filenames:
             filename, ext = os.path.splitext(file)
             ext = str.lower(ext)
+            
             if ext == '.jpg' or ext == '.jpeg' or ext == '.gif' or ext == '.png' or ext == '.pgm':
                 img_files.append(os.path.join(dirpath, file))
+            
             elif ext == '.bmp':
                  mask_files.append(os.path.join(dirpath, file))
+            
             elif ext == '.xml' or ext == '.gt' or ext == '.txt':
                 gt_files.append(os.path.join(dirpath, file))
+            
             elif ext == '.zip':
                 continue
+    
     return img_files, mask_files, gt_files
 
 def get_character_level_boxes(image: np.ndarray, region_score_map: np.ndarray):
     """
-    Given the region score map and the image itself, 
-    generate character level boxes 
+    Given the region score map and the image itself, generate character level boxes 
     Make sure Region Score map is in range 0 -> 1 
     """
     _, thresh = cv2.threshold(np.uint8(region_score_map * 255), 128, 255, cv2.THRESH_BINARY) 
@@ -254,12 +281,13 @@ def get_character_level_boxes(image: np.ndarray, region_score_map: np.ndarray):
     letter_boxes = []
 
     for i in np.unique(markers)[1:]:
-        #img = cv2.imread(image_path)
         mask = np.zeros((image.shape[0], image.shape[1]), dtype = np.uint8)
         mask[markers == i] = 255
         mask = cv2.morphologyEx(mask, cv2.MORPH_DILATE, kernel, iterations = 12)
+        
         top, bottom = np.min(np.where(np.max(mask,axis=1)==255)), np.max(np.where(np.max(mask,axis=1)==255))
         left, right  = np.min(np.where(np.max(mask,axis=0)==255)), np.max(np.where(np.max(mask,axis=0)==255))
+        
         letter_box = ((left, top), (right, bottom))
         letter_boxes.append(np.array([(top, left), (right, bottom)]))
         vis = cv2.rectangle(image, letter_box[1], letter_box[0], color = (0, 255, 0))
@@ -268,57 +296,55 @@ def get_character_level_boxes(image: np.ndarray, region_score_map: np.ndarray):
 
 def get_characters_top_down(image: np.ndarray, region_score_map: np.ndarray, text_recognizer):
     """
-    Given the region score map and the image itself, 
-    generate character level boxes 
-    Make sure Region Score map is in range 0 -> 1 
+    Given the region score map and the word image, generate letter level boxes and return the 
+    predictions made on these letter level boxes. Make sure Region Score map is in range 0 -> 1 
     """
     _, thresh = cv2.threshold(np.uint8(region_score_map * 255), 128, 255, cv2.THRESH_BINARY) 
     kernel = np.ones((3,3),np.uint8)
     opening = cv2.morphologyEx(thresh,cv2.MORPH_OPEN, kernel, iterations = 6)
     ret, markers = cv2.connectedComponents(opening)
-    letter_boxes = []
-    current_str = ""
+    letter_boxes, current_str = [], ""
 
     for i in np.unique(markers)[1:]:
         mask = np.zeros((image.shape[0], image.shape[1]), dtype = np.uint8)
         mask[markers == i] = 255
         mask = cv2.morphologyEx(mask, cv2.MORPH_DILATE, kernel, iterations = 15)
+        
         top, bottom = np.min(np.where(np.max(mask,axis=1)==255)), np.max(np.where(np.max(mask,axis=1)==255))
         left, right = 0, mask.shape[1]
+        
         letter_box = ((left, top), (right, bottom))
         letter_crop = image[top: bottom, left: right, :]
+        
         _, pred_letter = text_recognizer(letter_crop)
         pred_letter = str(pred_letter)[0]
         current_str += pred_letter
+        
         letter_boxes.append(np.array([(top, left), (right, bottom)]))
 
     return letter_boxes, image, current_str
 
 def get_straightened_boxes(image, region_map, boxes):
     """
-    Take all the slant boxes and return a list of images that are straightened 
-    Make sure box co-ordinates makes sense and is within the image 
-    all images must be cv2 read (They use BGR for some reason)
+    Take all the slant boxes and return a list of images that are straightened. Make sure box co-ordinates makes sense, 
+    and is within the image all images must be cv2 read (They use BGR for some reason); just use utils.loadImage
     """
     words, region_scores = [], []
+    
     for cnt in boxes:
         rect = cv2.minAreaRect(cnt)
         box = np.int0(cv2.boxPoints(rect))
         box = np.array([[list(b)] for b in box])
 
-        #cv2.drawContours(image, [box], 0, (0, 0, 255), 2)
         width = int(rect[1][0])
         height = int(rect[1][1])
-
         src_pts = box.astype("float32")
-        # coordinate of the points in box points after the rectangle has been
-        # straightened
 
+        # coordinate of the points in box points after the rectangle has been straightened
         dst_pts = np.array([[0, height-1],
                             [0, 0],
                             [width-1, 0],
                             [width-1, height-1]], dtype="float32")
-
 
         # the perspective transformation matrix
         M = cv2.getPerspectiveTransform(src_pts, dst_pts)
@@ -326,36 +352,33 @@ def get_straightened_boxes(image, region_map, boxes):
         # directly warp the rotated rectangle to get the straightened rectangle
         warped_region_cut = cv2.warpPerspective(region_map, M, (width, height)) 
         warped = cv2.warpPerspective(image, M, (width, height))
+        
         words.append(warped)
         region_scores.append(warped_region_cut)
-        #breakpoint()
+        
         warped_rotate = warped.transpose((1, 0, 2))[::-1]
         region_rot = warped_region_cut.transpose((1, 0))[::-1]
+        
         words.append(warped_rotate)
         region_scores.append(region_rot)
+    
     return words, region_scores
 
 def get_boxes(image, region_map, boxes):
     """
-    Take all the slant boxes and return a list of images that are straightened 
-    Make sure box co-ordinates makes sense and is within the image 
-    all images must be cv2 read (They use BGR for some reason)
+    Get the word crops given the image and the word boxes; and do the same transformations on the word heatmap
     """
     words, region_scores = [], []
     top_lefts, bottom_rights = [], []
+    
     for cnt in boxes:
         rect = cv2.minAreaRect(cnt)
         box = np.absolute(np.int0(cv2.boxPoints(rect)))
+        
         top_left, bottom_right = tuple(box[1]), tuple(box[3])
         top_lefts.append(top_left)
         bottom_rights.append(bottom_right)
-        """
-        img = image.copy()
-        print(top_left, bottom_right)
-        cv2.rectangle(img, top_left, bottom_right, (0, 255, 0))
-        cv2.imshow("", img)
-        cv2.waitKey(0)
-        """
+        
         word_image = image[min(top_left[1], bottom_right[1]): max(top_left[1], bottom_right[1]), min(top_left[0], bottom_right[0]): max(top_left[0], bottom_right[0]), :]
         word_map = region_map[min(top_left[1], bottom_right[1]): max(top_left[1], bottom_right[1]), min(top_left[0], bottom_right[0]): max(top_left[0], bottom_right[0])]
 
@@ -365,6 +388,11 @@ def get_boxes(image, region_map, boxes):
     return words, region_scores, top_lefts, bottom_rights
 
 def word_level_breakdown(largest_box_cuts, text_detector, boxes):
+    """
+    Break a phrase into its constituent words; sort them left to right or top to bottom based on height and width 
+    Keep track of all the orientations for further use ; Keep track of all the locations for further use ; Keep 
+    track of the heatmaps and apply the same transformations to the heatmaps as you would to the image 
+    """
     refined_words, refined_word_heatmaps = [], []
     cleaned_largest_box_cuts, final_coordinates = [], []
     word_coords, final_boxes, ffb = [], [], []
@@ -398,7 +426,6 @@ def word_level_breakdown(largest_box_cuts, text_detector, boxes):
             final_coordinates.append(words_coordinates)
             orientations.append(left_to_right)
             ffb.append(fb)
-            #breakpoint()
 
     return cleaned_largest_box_cuts, refined_words, refined_word_heatmaps, orientations, final_coordinates, ffb
     
@@ -406,8 +433,7 @@ def display(img_file, img, boxes, dirname='./inference_examples/', show = True):
         img = np.array(img)
         filename, _ = os.path.splitext(os.path.basename(img_file))
         result = os.path.join(dirname, filename +'.jpg')
-        if not os.path.isdir(dirname):
-            os.mkdir(dirname)
+        if not os.path.isdir(dirname): os.mkdir(dirname)
 
         for i, box in enumerate(boxes):
             poly = np.array(box).astype(np.int32).reshape((-1))
@@ -423,6 +449,9 @@ def display(img_file, img, boxes, dirname='./inference_examples/', show = True):
         return img
 
 def loadImage(img_file):
+    """
+    For the sake of consistency of image input types 
+    """
     img = cv2.imread(img_file)           
     if img.shape[0] == 2: img = img[0]
     if len(img.shape) == 2 : img = cv2.cvtColor(img, cv2.COLOR_GRAY2RGB)
@@ -451,22 +480,24 @@ def resize_aspect_ratio(img, square_size, interpolation, mag_ratio=1):
     target_size = mag_ratio * max(height, width)
 
     # set original image size
-    if target_size > square_size:
-        target_size = square_size
+    if target_size > square_size: target_size = square_size
     ratio = target_size / max(height, width)    
     target_h, target_w = int(height * ratio), int(width * ratio)
     proc = cv2.resize(img, (target_w, target_h), interpolation = interpolation)
 
     # make canvas and paste image
     target_h32, target_w32 = target_h, target_w
+
     if target_h % 32 != 0:
         target_h32 = target_h + (32 - target_h % 32)
     if target_w % 32 != 0:
         target_w32 = target_w + (32 - target_w % 32)
+
     resized = np.zeros((target_h32, target_w32, channel), dtype=np.float32)
     resized[0:target_h, 0:target_w, :] = proc
     target_h, target_w = target_h32, target_w32
     size_heatmap = (int(target_w/2), int(target_h/2))
+    
     return resized, ratio, size_heatmap
 
 def cvt2HeatmapImg(img):
@@ -475,67 +506,36 @@ def cvt2HeatmapImg(img):
     return img
 
 class strLabelConverter(object):
-    """Convert between str and label.
-
-    NOTE:
-        Insert `blank` to the alphabet for CTC.
-
-    Args:
-        alphabet (str): set of the possible characters.
-        ignore_case (bool, default=True): whether or not to ignore all of the case.
-    """
-
     def __init__(self, alphabet, ignore_case=True):
         self._ignore_case = ignore_case
         if self._ignore_case:
             alphabet = alphabet.lower()
-        self.alphabet = alphabet + '-'  # for `-1` index
 
+        self.alphabet = alphabet + '-'  # for `-1` index
         self.dict = {}
+
         for i, char in enumerate(alphabet):
             # NOTE: 0 is reserved for 'blank' required by wrap_ctc
             self.dict[char] = i + 1
 
     def encode(self, text):
-        """Support batch or single str.
-
-        Args:
-            text (str or list of str): texts to convert.
-
-        Returns:
-            torch.IntTensor [length_0 + length_1 + ... length_{n - 1}]: encoded texts.
-            torch.IntTensor [n]: length of each text.
-        """
         if isinstance(text, str):
-            text = [
-                self.dict[char.lower() if self._ignore_case else char]
-                for char in text
-            ]
+            text = [self.dict[char.lower() if self._ignore_case else char] for char in text]
             length = [len(text)]
+
         elif isinstance(text, collections.Iterable):
             length = [len(s) for s in text]
             text = ''.join(text)
             text, _ = self.encode(text)
+
         return (torch.IntTensor(text), torch.IntTensor(length))
 
     def decode(self, t, length, raw=False):
-        """Decode encoded texts back into strs.
-
-        Args:
-            torch.IntTensor [length_0 + length_1 + ... length_{n - 1}]: encoded texts.
-            torch.IntTensor [n]: length of each text.
-
-        Raises:
-            AssertionError: when the texts and its length does not match.
-
-        Returns:
-            text (str or list of str): texts to convert.
-        """
         if length.numel() == 1:
             length = length[0]
             assert t.numel() == length, "text with length: {} does not match declared length: {}".format(t.numel(), length)
-            if raw:
-                return ''.join([self.alphabet[i - 1] for i in t])
+            
+            if raw: return ''.join([self.alphabet[i - 1] for i in t])
             else:
                 char_list = []
                 for i in range(length):
@@ -547,6 +547,7 @@ class strLabelConverter(object):
             assert t.numel() == length.sum(), "texts with length: {} does not match declared length: {}".format(t.numel(), length.sum())
             texts = []
             index = 0
+            
             for i in range(length.numel()):
                 l = length[i]
                 texts.append(
@@ -555,10 +556,7 @@ class strLabelConverter(object):
                 index += l
             return texts
 
-
 class averager(object):
-    """Compute average for `torch.Variable` and `torch.Tensor`. """
-
     def __init__(self):
         self.reset()
 
@@ -583,32 +581,28 @@ class averager(object):
             res = self.sum / float(self.n_count)
         return res
 
-
 def oneHot(v, v_length, nc):
     batchSize = v_length.size(0)
     maxLength = v_length.max()
     v_onehot = torch.FloatTensor(batchSize, maxLength, nc).fill_(0)
     acc = 0
+    
     for i in range(batchSize):
         length = v_length[i]
         label = v[acc:acc + length].view(-1, 1).long()
         v_onehot[i, :length].scatter_(1, label, 1.0)
         acc += length
+    
     return v_onehot
-
 
 def loadData(v, data):
     v.data.resize_(data.size()).copy_(data)
 
-
 def prettyPrint(v):
     print('Size {0}, Type: {1}'.format(str(v.size()), v.data.type()))
-    print('| Max: %f | Min: %f | Mean: %f' % (v.max().data[0], v.min().data[0],
-                                              v.mean().data[0]))
-
+    print('| Max: %f | Min: %f | Mean: %f' % (v.max().data[0], v.min().data[0], v.mean().data[0]))
 
 def assureRatio(img):
-    """Ensure imgH <= imgW."""
     b, c, h, w = img.size()
     if h > w:
         main = nn.UpsamplingBilinear2d(size=(h, h), scale_factor=None)
@@ -616,18 +610,17 @@ def assureRatio(img):
     return img
 
 def copyStateDict(state_dict):
-    if list(state_dict.keys())[0].startswith("module"):
-        start_idx = 1
-    else:
-        start_idx = 0
-    new_state_dict = OrderedDict()
+    if list(state_dict.keys())[0].startswith("module"): start_idx = 1
+    else: start_idx = 0
+    
+    new_state_dict = OrderedDict()    
     for k, v in state_dict.items():
         name = ".".join(k.split(".")[start_idx:])
         new_state_dict[name] = v
+    
     return new_state_dict
 
 class resizeNormalize(object):
-
     def __init__(self, size, interpolation=Image.BILINEAR):
         self.size = size
         self.interpolation = interpolation
