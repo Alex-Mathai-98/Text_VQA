@@ -132,7 +132,7 @@ class EndToEndOCR(nn.Module):
 
             # Iterate through constituent words for the phrases
             for w, m in zip(word, maps):
-
+                """
                 # Check if the word is read top to bottom (rot = False)
                 if not rot:
 
@@ -143,7 +143,7 @@ class EndToEndOCR(nn.Module):
                     if len(vert_pred) > 1:
                         tokens.append(vert_pred)
                         locations.append(final_coords[ind1][ind2])
-                
+                """
                 # If left-to-right, generally apply text recognition on word
                 _, out = self.text_recognizer(w)
                 tokens.append(out)

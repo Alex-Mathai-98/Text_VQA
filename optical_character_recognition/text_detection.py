@@ -102,3 +102,6 @@ if __name__ == '__main__':
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     result_folder = './optical_character_recognition/inference_examples/'
+
+    td = TextDetection().to(device)
+    td.display(args.test_image)
