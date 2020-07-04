@@ -1,4 +1,4 @@
-# Text Visual Question Answering in Natural Scene Imagery 
+# Text Visual Question Answering in Natural Images 
 
 The following is a description of our model and each module involved in the pipeline with links linking to a better thorough description of each module. In this readme we have only shown some visualizations to be able to interpret what the model is doing and to understand the pipeline better. 
 
