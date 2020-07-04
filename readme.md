@@ -14,39 +14,7 @@ As visible from the repository structure, each module has a folder of its own. E
 
 ---
 
-## Text Feature Extraction 
-The model needs a representation of the question to understand what is being asked in the first place, and what regions of the image and what OCR tokens need to be paid attention to. For this, we have used transformer based BERT embeddings to get the words and used transformer based self attention to get the representation of the question. 
-
-This question representation is an improvement over the original [papers](https://arxiv.org/abs/1904.08920) LSTM based self-attention on GloVe embeddings. 
-
-This representation helps the model understand the question and is used to focus on particular regions of the image and on particular OCR tokens, that are most relevant to the question. 
-
-Code in `Text_Features`
-
----
-
-## Image Feature Extraction 
-The image feature extraction has two implementations; both of which are used in the final model in conjunction. These two implementations are grid based features and the object level features. 
-
-Code in `image_features`
-
-## Grid based features 
-The grid based features are a 14 x 14 grid that are the output of a pre-trained models convolution.  
-
-We have used [ResNet152](https://arxiv.org/abs/1512.03385)'s 14 x 14 x 2048 layer, and average along the channels to be able to get our grid. Each image corresponds exactly one 14 x 14 grid based feature 
-
-## Object Level Features 
-For object level features, first the image is passes through an object detection algorithm which gives us k number of objects in that image. Each of these k objects are then cropped and passed through a feature extractor giving us a tensor of shape (k, 2048), where k is different for each image. 
-
-|<img src="https://github.com/Alex-Mathai-98/Text_VQA/blob/master/diagrams/fasterrcnn.png" alt="drawing" width="420"/> |<img src="https://github.com/Alex-Mathai-98/Text_VQA/blob/master/diagrams/maskrcnn.jpg" alt="drawing" width="540"/> |
-|:---:|:----:|
-|Faster-RCNN sample result| Mask-RCNN sample result |
-
-The pre-trained models we have used are both [faster-rcnn](https://arxiv.org/abs/1506.01497) and [mask-rcnn](https://arxiv.org/abs/1703.06870), based on a flag. The feature extractor we have used is [ResNet152](https://arxiv.org/abs/1512.03385)'s 2048 dimensional layer. 
-
----
-
-## Optical Character Recognition
+## Optical Character Recognition Module
 
 The optical character recognition module primarily consists of two stages - the text detection and the text recognition stage. The text detection stage is what tells the OCR module where readable content is; this is followed by post-processing to increase the readibility of the readable content followed by the reading itself (Text Recognition) 
 
@@ -82,6 +50,38 @@ We use this heirarchy to understand the orientation of the image and process the
 The text recognition module looks at the lowest levels of the heirarchy (either letter level boxes or word level boxes depending on orientation) and reads either from top to bottom or left to right based on the orientation (Assumed that nothing in english is read right-to-left or bottom-to-top). Once this reading is done the text predictions at lowest level are aggregated based on orientation to make the prediction for the higher level and eventually the top level. 
 
 The collections of all the predictions at all levels (apart from letter level) are all put together as the list of ocr tokens for that image. The model used for left to right reading can be found [here](https://arxiv.org/abs/1507.05717).
+
+---
+
+## Image Feature Extraction Module
+The image feature extraction has two implementations; both of which are used in the final model in conjunction. These two implementations are grid based features and the object level features. 
+
+Code in `image_features`
+
+## Grid based features 
+The grid based features are a 14 x 14 grid that are the output of a pre-trained models convolution.  
+
+We have used [ResNet152](https://arxiv.org/abs/1512.03385)'s 14 x 14 x 2048 layer, and average along the channels to be able to get our grid. Each image corresponds exactly one 14 x 14 grid based feature 
+
+## Object Level Features 
+For object level features, first the image is passes through an object detection algorithm which gives us k number of objects in that image. Each of these k objects are then cropped and passed through a feature extractor giving us a tensor of shape (k, 2048), where k is different for each image. 
+
+|<img src="https://github.com/Alex-Mathai-98/Text_VQA/blob/master/diagrams/fasterrcnn.png" alt="drawing" width="420"/> |<img src="https://github.com/Alex-Mathai-98/Text_VQA/blob/master/diagrams/maskrcnn.jpg" alt="drawing" width="540"/> |
+|:---:|:----:|
+|Faster-RCNN sample result| Mask-RCNN sample result |
+
+The pre-trained models we have used are both [faster-rcnn](https://arxiv.org/abs/1506.01497) and [mask-rcnn](https://arxiv.org/abs/1703.06870), based on a flag. The feature extractor we have used is [ResNet152](https://arxiv.org/abs/1512.03385)'s 2048 dimensional layer. 
+
+---
+
+## Text Feature Extraction Module
+The model needs a representation of the question to understand what is being asked in the first place, and what regions of the image and what OCR tokens need to be paid attention to. For this, we have used transformer based BERT embeddings to get the words and used transformer based self attention to get the representation of the question. 
+
+This question representation is an improvement over the original [papers](https://arxiv.org/abs/1904.08920) LSTM based self-attention on GloVe embeddings. 
+
+This representation helps the model understand the question and is used to focus on particular regions of the image and on particular OCR tokens, that are most relevant to the question. 
+
+Code in `Text_Features`
 
 ---
 
